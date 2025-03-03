@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Books Library</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Books Library</h1>
+    <p>Discover, organize and manage your literary collection</p>
+  </header>
+
+  <div class="container">
+    <div class="search-container">
+      <div class="search-input-group">
+        <input type="text" id="searchInput" placeholder="Search for books...">
+        <select id="searchField">
+          <option value="title">Title</option>
+          <option value="author">Author</option>
+          <option value="genre">Genre</option>
+        </select>
+      </div>
+      <button id="searchBtn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        Search
+      </button>
+      <button id="resetBtn" class="btn-reset">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+          <path d="M3 3v5h5"></path>
+        </svg>
+        Reset
+      </button>
+      <button id="addBookBtn" class="btn-add">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        Add Book
+      </button>
+    </div>
+
+    <div class="books-container" id="booksContainer">
+      <!-- Books will be displayed here -->
+    </div>
+
+    <div class="pagination" id="pagination">
+      <!-- Pagination buttons will be added here -->
+    </div>
+
+    <div class="meta-info" id="metaInfo">
+      <!-- Info about results will be displayed here -->
+    </div>
+  </div>
+
+  <!-- Add/Edit Book Modal -->
+  <div id="bookModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modalTitle">Add New Book</h2>
+        <button class="close-btn" id="closeModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="modalMessage" class="alert alert-success" style="display: none;"></div>
+        <div id="modalError" class="alert alert-error" style="display: none;"></div>
+        
+        <form id="bookForm">
+          <input type="hidden" id="bookId">
+          <div class="form-group">
+            <label for="title">Title</label>
+            <input type="text" id="title" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label for="author">Author</label>
+            <input type="text" id="author" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label for="genre">Genre</label>
+            <input type="text" id="genre" class="form-control">
+          </div>
+          <div class="form-group">
+            <label for="year">Year</label>
+            <input type="number" id="year" class="form-control" min="1" max="2025">
+          </div>
+          <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" class="form-control" rows="4"></textarea>
+          </div>
+          <div class="action-buttons">
+            <button type="button" id="cancelBtn" class="btn-cancel">Cancel</button>
+            <button type="submit" id="saveBtn">Save Book</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="deleteModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Confirm Deletion</h2>
+        <button class="close-btn" id="closeDeleteModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to delete this book? This action cannot be undone.</p>
+        <input type="hidden" id="deleteBookId">
+        <div class="action-buttons">
+          <button type="button" id="cancelDeleteBtn" class="btn-cancel">Cancel</button>
+          <button type="button" id="confirmDeleteBtn" class="btn-delete">Delete Book</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p>&copy; 2025 Books Library. All rights reserved.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

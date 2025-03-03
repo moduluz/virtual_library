@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Library</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-book-reader"></i> Virtual Library
+            </a>
+            <div class="d-flex align-items-center">
+                <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#addBookModal">
+                    <i class="fas fa-plus"></i> Add Book
+                </button>
+                <div class="d-flex">
+                    <input type="search" id="searchInput" class="form-control me-2" placeholder="Search books...">
+                    <select id="searchField" class="form-select me-2">
+                        <option value="Book Name">Title</option>
+                        <option value="Author">Author</option>
+                    </select>
+                </div>
+                <button class="btn btn-outline-primary" id="toggleView">
+                    <i class="fas fa-th-large"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-books"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h5>Total Books</h5>
+                        <h2 id="totalBooks">0</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-star"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h5>Favorites</h5>
+                        <h2 id="totalFavorites">0</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-book-open"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h5>Reading</h5>
+                        <h2 id="currentlyReading">0</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h5>Completed</h5>
+                        <h2 id="completedBooks">0</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="booksList" class="row g-4">
+            <!-- Books will be dynamically added here -->
+        </div>
+        
+        <div class="d-flex justify-content-center mt-4">
+            <nav aria-label="Page navigation">
+                <ul class="pagination" id="pagination">
+                    <!-- Pagination will be dynamically added here -->
+                </ul>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Book Details Modal -->
+    <div class="modal fade" id="bookModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Book Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="bookDetails">
+                    <!-- Book details will be dynamically added here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Book Modal -->
+    <div class="modal fade" id="addBookModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Book</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addBookForm">
+                        <div class="mb-3">
+                            <label class="form-label">Book Title*</label>
+                            <input type="text" class="form-control" name="Book Name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Author*</label>
+                            <input type="text" class="form-control" name="Author" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Cover Image URL</label>
+                            <input type="url" class="form-control" name="URL" id="coverUrlInput">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">PDF Link</label>
+                            <input type="url" class="form-control" name="pdf_link">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" name="description" rows="3" placeholder="Enter book description..."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Cover Preview</label>
+                            <div class="cover-preview-container">
+                                <img id="coverPreview" src="https://via.placeholder.com/200x300?text=Cover+Preview" alt="Cover Preview">
+                            </div>
+                        </div>
+                        <div class="alert alert-success d-none" id="addSuccess">
+                            Book added successfully!
+                        </div>
+                        <div class="alert alert-danger d-none" id="addError">
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> Add Book
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html> 
