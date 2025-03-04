@@ -1,10 +1,11 @@
 // Required packages
+require('dotenv').config();
 const express = require('express');
 const { MongoClient, ObjectId } = require('mongodb');
 const path = require('path');
 const cors = require('cors');
 const app = express();
-const port = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
@@ -14,12 +15,57 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // MongoDB connection string
-const uri = process.env.MONGODB_URI || "mongodb://localhost:27017/";
-const client = new MongoClient(uri);
-
-// Database and collection names
-const dbName = process.env.DB_NAME || "admin";
+const uri = process.env.MONGODB_URI;
+const dbName = process.env.DB_NAME || 'admin';
 const collectionName = "books";
+
+// MongoDB client configuration
+const client = new MongoClient(uri, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+});
+let booksCollection;
+
+// Connect to MongoDB
+async function connectToMongo() {
+    try {
+        console.log('Attempting to connect to MongoDB...');
+        console.log(`Target database: ${dbName}, collection: ${collectionName}`);
+        
+        await client.connect();
+        console.log('Successfully connected to MongoDB');
+        
+        const db = client.db(dbName);
+        booksCollection = db.collection(collectionName);
+        
+        // Test the connection by counting documents
+        const count = await booksCollection.countDocuments({});
+        console.log(`Found ${count} documents in ${dbName}.${collectionName}`);
+        
+        return booksCollection;
+    } catch (error) {
+        console.error('MongoDB Connection Error:', error);
+        throw error;
+    }
+}
+
+// Initialize MongoDB connection
+connectToMongo().then(() => {
+    console.log('MongoDB connection initialized');
+    app.listen(PORT, () => {
+        console.log(`Server is running on port ${PORT}`);
+        console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+}).catch(error => {
+    console.error('Failed to initialize MongoDB:', error);
+    process.exit(1);
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error('Error:', err);
+    res.status(500).json({ error: 'Internal Server Error', details: err.message });
+});
 
 // Book schema validation
 const bookSchema = {
@@ -30,36 +76,16 @@ const bookSchema = {
     'description': String
 };
 
-// Connect to MongoDB
-async function connectToMongo() {
-    try {
-        await client.connect();
-        console.log("Connected to MongoDB");
-        return client.db(dbName).collection(collectionName);
-    } catch (error) {
-        console.error("Could not connect to MongoDB", error);
-        process.exit(1);
-    }
-}
-
-let booksCollection;
-connectToMongo().then(collection => {
-    booksCollection = collection;
-});
-
 // Validate book data
 function validateBook(book) {
     const errors = [];
     
-    console.log('Validating book data:', book); // Debug log
-    
-    // Check if book data exists and is an object
     if (!book || typeof book !== 'object') {
         errors.push('Invalid book data format');
         return errors;
     }
     
-    // Required fields with strict validation
+    // Required fields
     if (!book['Book Name'] || typeof book['Book Name'] !== 'string' || !book['Book Name'].trim()) {
         errors.push('Book Name is required and must be a non-empty string');
     }
@@ -68,20 +94,19 @@ function validateBook(book) {
         errors.push('Author is required and must be a non-empty string');
     }
     
-    // Optional fields with type validation
+    // Optional fields
     if (book['URL'] && typeof book['URL'] !== 'string') {
         errors.push('URL must be a string if provided');
     }
     
     if (book['pdf_link'] && typeof book['pdf_link'] !== 'string') {
-        errors.push('PDF link must be a string if provided');
+        errors.push('pdf_link must be a string if provided');
     }
     
     if (book['description'] && typeof book['description'] !== 'string') {
-        errors.push('Description must be a string if provided');
+        errors.push('description must be a string if provided');
     }
     
-    console.log('Validation errors:', errors); // Debug log
     return errors;
 }
 
@@ -132,30 +157,39 @@ app.get('/api/books/search', async (req, res) => {
 
 // GET all books with pagination
 app.get('/api/books', async (req, res) => {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
-    
-    const books = await booksCollection.find({})
-      .skip(skip)
-      .limit(limit)
-      .toArray();
-    
-    const total = await booksCollection.countDocuments({});
-    
-    res.json({
-      data: books,
-      meta: {
-        total,
-        page,
-        limit,
-        pages: Math.ceil(total / limit)
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+    try {
+        console.log('Fetching books...');
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+        
+        console.log(`Query params - page: ${page}, limit: ${limit}, skip: ${skip}`);
+        
+        const books = await booksCollection.find({})
+            .skip(skip)
+            .limit(limit)
+            .toArray();
+        
+        const total = await booksCollection.countDocuments({});
+        
+        console.log(`Found ${books.length} books out of ${total} total`);
+        
+        res.json({
+            data: books,
+            meta: {
+                total,
+                page,
+                limit,
+                pages: Math.ceil(total / limit)
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching books:', error);
+        res.status(500).json({ 
+            error: 'Failed to fetch books',
+            details: error.message 
+        });
+    }
 });
 
 // GET a single book by ID - MOVED AFTER search route
@@ -271,7 +305,10 @@ app.get('/', (req, res) => {
   });
 });
 
-// Start the server
-app.listen(port, () => {
-  console.log(`API server running on port ${port}`);
-});
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+    app.use(express.static('public'));
+    app.get('*', (req, res) => {
+        res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
+    });
+}
