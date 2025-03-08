@@ -1,15 +1,25 @@
-# Virtual Library
+# Eternal Narratives
 
-A mobile-friendly virtual library application that allows users to manage and track their book collection.
+A modern web application for managing your personal book collection with features for reading, tracking progress, and organizing your library.
 
 ## Features
 
-- Mobile-first design
-- Book management (Add, Edit, Delete)
-- Search functionality
+- User authentication and authorization
+- Book management system
+- File upload support for book covers and PDF files
 - Reading progress tracking
-- Favorites system
-- Responsive UI with animations
+- Private/public book settings
+- Favorite books feature
+- Custom tagging system
+- Advanced search functionality
+
+## Tech Stack
+
+- Frontend: HTML, CSS, JavaScript
+- Backend: Node.js, Express.js
+- Database: MongoDB
+- Authentication: JWT, bcryptjs
+- File Handling: multer
 
 ## Setup
 
@@ -18,51 +28,39 @@ A mobile-friendly virtual library application that allows users to manage and tr
 npm install
 ```
 
-2. Set up environment variables:
-Create a `.env` file with:
+2. Create a `.env` file with the following variables:
 ```
 MONGODB_URI=your_mongodb_connection_string
-DB_NAME=your_database_name
+JWT_SECRET=your_jwt_secret
 PORT=3000
 ```
 
-3. Run the application:
+3. Start the server:
 ```bash
 npm start
 ```
 
-## Deployment
-
-### Deploy to Render.com:
-
-1. Create a free account on [Render.com](https://render.com)
-2. Create a new Web Service
-3. Connect your GitHub repository
-4. Configure the service:
-   - Build Command: `npm install`
-   - Start Command: `npm start`
-5. Add environment variables:
-   - `MONGODB_URI`
-   - `DB_NAME`
-
-### Deploy to MongoDB Atlas:
-
-1. Create a free account on [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
-2. Create a new cluster
-3. Get your connection string
-4. Add it to your environment variables
-
-## Development
-
-Run in development mode with auto-reload:
+For development:
 ```bash
 npm run dev
 ```
 
-## Technologies Used
+## Directory Structure
 
-- Node.js
-- Express
-- MongoDB
-- Bootstrap 5
-- CSS3 Animations 
+```
+├── public/
+│   ├── css/
+│   └── js/
+├── uploads/
+│   ├── covers/
+│   └── pdfs/
+├── server.js
+├── index.html
+└── styles.css
+```
+
+## File Upload Limits
+
+- Cover images: Images only (jpg, png, gif)
+- PDF files: PDF format only
+- Maximum file size: 10MB
