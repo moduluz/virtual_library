@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
-import { useUser } from "@clerk/nextjs"
+import { useUser, useAuth } from "@clerk/nextjs"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -13,8 +13,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "@/components/ui/use-toast"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { uploadBookPDF } from "@/lib/storage-service"
+import { uploadBookPDF, getBookPDFUrl } from "@/lib/storage-service"
 import { Book } from "@/lib/supabase"
+import { Star } from "lucide-react"
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ACCEPTED_FILE_TYPES = ["application/pdf"]
@@ -36,9 +37,51 @@ const bookFormSchema = z.object({
 
 type BookFormValues = z.infer<typeof bookFormSchema>
 
+function normalizeRating(rating: unknown): number | null {
+  if (rating === undefined || rating === null || rating === "") {
+    return null;
+  }
+  const num = Number(rating);
+  if (isNaN(num) || num < 0 || num > 5) {
+    return null;
+  }
+  return num;
+}
+
+// StarRating component for selecting a rating
+function StarRating({ value, onChange }: { value: number | null, onChange: (val: number) => void }) {
+  return (
+    <div className="flex items-center space-x-1">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <button
+          type="button"
+          key={i}
+          onClick={() => onChange(i + 1)}
+          onMouseDown={e => e.preventDefault()}
+          className="focus:outline-none"
+        >
+          <Star
+            className={`w-6 h-6 ${value !== null && i < value ? "text-yellow-500 fill-yellow-500" : "text-gray-300"}`}
+            fill={value !== null && i < value ? "#facc15" : "none"}
+          />
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={() => onChange(0)}
+        className="ml-2 text-xs text-muted-foreground underline"
+        onMouseDown={e => e.preventDefault()}
+      >
+        Clear
+      </button>
+    </div>
+  )
+}
+
 export default function EditBookPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
   const { user } = useUser()
+  const { getToken } = useAuth();
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [pdfPreview, setPdfPreview] = useState<string | null>(null)
@@ -132,16 +175,20 @@ export default function EditBookPage({ params }: { params: Promise<{ id: string 
     setIsSubmitting(true)
 
     try {
+      // Clean up the data before sending
+      const cleanedData = {
+        ...data,
+        rating: normalizeRating(data.rating),
+        pdfFile: undefined, // Remove the file from the JSON
+      }
+
       // First, update the book without PDF
       const response = await fetch(`/api/books/${resolvedParams.id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          ...data,
-          pdfFile: undefined, // Remove the file from the JSON
-        }),
+        body: JSON.stringify(cleanedData),
       })
 
       if (!response.ok) {
@@ -152,8 +199,12 @@ export default function EditBookPage({ params }: { params: Promise<{ id: string 
       // If there's a new PDF file, upload it
       if (data.pdfFile) {
         try {
-          const pdfUrl = await uploadBookPDF(data.pdfFile, user.id, resolvedParams.id)
-          
+          const token = await getToken();
+          if (!token) {
+            throw new Error("Failed to get authentication token");
+          }
+          await uploadBookPDF(data.pdfFile, resolvedParams.id, token);
+          const pdfUrl = await getBookPDFUrl(resolvedParams.id, token);
           // Update the book with the PDF URL
           const updateResponse = await fetch(`/api/books/${resolvedParams.id}`, {
             method: "PATCH",
@@ -369,6 +420,20 @@ export default function EditBookPage({ params }: { params: Promise<{ id: string 
                       Upload a PDF version of the book (max 10MB)
                       {currentBook.pdfUrl && " - A PDF is already uploaded"}
                     </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="rating"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Rating</FormLabel>
+                    <FormControl>
+                      <StarRating value={field.value ?? 0} onChange={val => field.onChange(val === 0 ? null : val)} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -1,10 +1,13 @@
-import { supabase } from './supabase'
+import { getBrowserClient } from './supabase'
+import type { FileObject } from '@supabase/storage-js'
+
+const supabase = getBrowserClient()
 
 async function ensureBucketExists() {
   try {
     // First check if bucket exists
     const { data: buckets } = await supabase.storage.listBuckets()
-    const bucketExists = buckets?.some(bucket => bucket.name === 'books-pdf')
+    const bucketExists = buckets?.some((bucket: { name: string }) => bucket.name === 'books-pdf')
     
     if (!bucketExists) {
       console.log('Creating books-pdf bucket...')
@@ -35,112 +38,118 @@ async function ensureBucketExists() {
   }
 }
 
-export async function uploadBookPDF(file: File, userId: string, bookId: string): Promise<string> {
-  if (!supabase) {
-    throw new Error('Supabase client not initialized')
-  }
-
-  console.log('Starting PDF upload:', {
-    fileName: file.name,
-    fileSize: file.size,
-    fileType: file.type,
-    userId,
-    bookId
-  })
-
-  // Ensure bucket exists
-  await ensureBucketExists()
-
-  // Create a unique file name using a timestamp to prevent collisions
-  const timestamp = Date.now()
-  const fileExt = file.name.split('.').pop()
-  const fileName = `${userId}/${bookId}_${timestamp}.${fileExt}`
-
-  console.log('Uploading to path:', fileName)
-
+export async function uploadBookPDF(file: File, bookId: string, token?: string) {
   try {
-    // Upload file to Supabase Storage
+    const bucketName = 'books-pdf'
+    const supabase = getBrowserClient(token);
+    // Generate unique filename
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${bookId}-${Date.now()}.${fileExt}`
+    const filePath = fileName
+
+    console.log('Starting PDF upload:', {
+      bucketName,
+      fileName,
+      fileSize: file.size,
+      fileType: file.type
+    })
+
     const { data, error } = await supabase.storage
-      .from('books-pdf')
-      .upload(fileName, file, {
+      .from(bucketName)
+      .upload(filePath, file, {
         cacheControl: '3600',
         upsert: true
       })
 
     if (error) {
-      console.error('Error uploading PDF:', {
-        error,
-        fileName,
-        userId,
-        bookId
-      })
+      console.error('Error uploading file:', error)
       throw new Error(`Failed to upload PDF: ${error.message}`)
     }
 
-    console.log('Upload successful:', data)
-
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('books-pdf')
-      .getPublicUrl(fileName)
-
-    console.log('Generated public URL:', publicUrl)
-
-    return publicUrl
+    console.log('File uploaded successfully:', data)
+    return data
   } catch (error) {
-    console.error('Unexpected error during PDF upload:', error)
+    console.error('Error in uploadBookPDF:', error)
     throw error
   }
 }
 
-export async function deleteBookPDF(userId: string, bookId: string): Promise<void> {
-  if (!supabase) {
-    throw new Error('Supabase client not initialized')
-  }
-
-  // Ensure bucket exists
-  await ensureBucketExists()
-
+export async function getBookPDFUrl(bookId: string, token?: string) {
   try {
-    // List files in the user's directory
+    const bucketName = 'books-pdf'
+    const supabase = getBrowserClient(token);
+    console.log('Getting PDF URL for book:', bookId)
+    // List files to find the book's PDF
     const { data: files, error: listError } = await supabase.storage
-      .from('books-pdf')
-      .list(`${userId}`)
+      .from(bucketName)
+      .list('', {
+        search: bookId
+      })
 
     if (listError) {
       console.error('Error listing files:', listError)
-      throw new Error('Failed to list PDF files')
+      throw new Error(`Failed to list files: ${listError.message}`)
     }
 
-    // Find files that match the bookId pattern
-    const filesToDelete = files
-      .filter(file => file.name.startsWith(`${bookId}_`))
-      .map(file => `${userId}/${file.name}`)
+    console.log('Found files:', files)
 
-    if (filesToDelete.length === 0) {
-      console.log('No PDF files found to delete')
-      return
+    const bookFile = files?.find((file: { name: string }) => file.name.includes(bookId))
+    
+    if (!bookFile) {
+      console.log('No PDF found for book:', bookId)
+      return null
     }
 
-    console.log('Deleting PDFs:', filesToDelete)
+    // Get public URL for the file
+    const { data } = supabase.storage
+      .from(bucketName)
+      .getPublicUrl(bookFile.name)
 
-    const { error: deleteError } = await supabase.storage
-      .from('books-pdf')
-      .remove(filesToDelete)
-
-    if (deleteError) {
-      console.error('Error deleting PDFs:', {
-        error: deleteError,
-        filesToDelete,
-        userId,
-        bookId
-      })
-      throw new Error(`Failed to delete PDFs: ${deleteError.message}`)
-    }
-
-    console.log('PDFs deleted successfully')
+    console.log('Generated public URL:', data.publicUrl)
+    return data.publicUrl
   } catch (error) {
-    console.error('Unexpected error during PDF deletion:', error)
+    console.error('Error getting PDF URL:', error)
+    throw error
+  }
+}
+
+export async function deleteBookPDF(bookId: string, token?: string) {
+  try {
+    const bucketName = 'books-pdf'
+    const supabase = getBrowserClient(token);
+    console.log('Deleting PDF for book:', bookId)
+    // List files to find the book's PDF
+    const { data: files, error: listError } = await supabase.storage
+      .from(bucketName)
+      .list('', {
+        search: bookId
+      })
+
+    if (listError) {
+      console.error('Error listing files:', listError)
+      throw new Error(`Failed to list files: ${listError.message}`)
+    }
+
+    const bookFile = files?.find((file: { name: string }) => file.name.includes(bookId))
+    
+    if (!bookFile) {
+      console.log('No PDF found to delete for book:', bookId)
+      return true // File doesn't exist, consider it deleted
+    }
+
+    const { error } = await supabase.storage
+      .from(bucketName)
+      .remove([bookFile.name])
+
+    if (error) {
+      console.error('Error deleting file:', error)
+      throw new Error(`Failed to delete PDF: ${error.message}`)
+    }
+
+    console.log('PDF deleted successfully for book:', bookId)
+    return true
+  } catch (error) {
+    console.error('Error deleting PDF:', error)
     throw error
   }
 } 

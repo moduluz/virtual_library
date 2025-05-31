@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { currentUser } from "@clerk/nextjs/server"
 import { addBook } from "@/lib/book-service"
-import { supabase } from "@/lib/supabase"
 
 export async function POST(request: Request) {
   try {
@@ -11,30 +10,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Create users table if it doesn't exist
-    const { error: createTableError } = await supabase.rpc('create_users_table_if_not_exists')
-    
-    if (createTableError) {
-      console.error("Error creating users table:", createTableError)
-      // Continue anyway, as the table might already exist
-    }
-
-    // Ensure user exists in our database
-    const { error: userError } = await supabase
-      .from('users')
-      .upsert({
-        id: user.id,
-        email: user.emailAddresses[0]?.emailAddress || user.primaryEmailAddress?.emailAddress
-      })
-      .select()
-      .single()
-
-    if (userError) {
-      console.error("Error ensuring user exists:", userError)
-      // Continue anyway, as we can still add the book
-    }
-
     const data = await request.json()
+    
+    // Sanitize and validate rating
+    if (data.rating !== undefined) {
+      if (data.rating === null || data.rating === "" || typeof data.rating === "undefined") {
+        data.rating = null
+      } else {
+        const ratingNum = Number(data.rating)
+        if (isNaN(ratingNum) || ratingNum < 0 || ratingNum > 5) {
+          return NextResponse.json({ error: "Rating must be a number between 0 and 5 or null" }, { status: 400 })
+        }
+        data.rating = ratingNum
+      }
+    }
     
     try {
       const book = await addBook(user.id, data)

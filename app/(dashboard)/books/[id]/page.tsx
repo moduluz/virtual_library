@@ -10,12 +10,13 @@ import { PDFViewer } from "@/components/pdf-viewer"
 
 export default async function BookDetailPage({ params }: { params: { id: string } }) {
   const user = await currentUser()
+  const { id } = await params
 
   if (!user) {
     redirect("/sign-in")
   }
 
-  const book = await getBookById(user.id, params.id)
+  const book = await getBookById(user.id, id)
 
   if (!book) {
     notFound()

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { useUser } from "@clerk/nextjs"
+import { useUser, useAuth } from "@clerk/nextjs"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "@/components/ui/use-toast"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { uploadBookPDF } from "@/lib/storage-service"
+import { uploadBookPDF, getBookPDFUrl } from "@/lib/storage-service"
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ACCEPTED_FILE_TYPES = ["application/pdf"]
@@ -35,8 +35,19 @@ const bookFormSchema = z.object({
 
 type BookFormValues = z.infer<typeof bookFormSchema>
 
+function normalizeRating(rating: unknown): number | null {
+  if (typeof rating === "string") {
+    return rating.trim() === "" ? null : Number(rating);
+  }
+  if (rating === undefined || rating === null) {
+    return null;
+  }
+  return Number(rating);
+}
+
 export default function AddBookPage() {
   const { user } = useUser()
+  const { getToken } = useAuth();
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [pdfPreview, setPdfPreview] = useState<string | null>(null)
@@ -93,6 +104,7 @@ export default function AddBookPage() {
         },
         body: JSON.stringify({
           ...data,
+          rating: normalizeRating(data.rating),
           pdfFile: undefined, // Remove the file from the JSON
         }),
       })
@@ -108,7 +120,12 @@ export default function AddBookPage() {
       // If there's a PDF file, upload it
       if (data.pdfFile) {
         try {
-          const pdfUrl = await uploadBookPDF(data.pdfFile, user.id, book.id)
+          const token = await getToken();
+          if (!token) {
+            throw new Error("Failed to get authentication token");
+          }
+          await uploadBookPDF(data.pdfFile, book.id, token)
+          const pdfUrl = await getBookPDFUrl(book.id, token)
           
           // Update the book with the PDF URL
           const updateResponse = await fetch(`/api/books/${book.id}`, {
