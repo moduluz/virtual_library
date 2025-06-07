@@ -16,22 +16,22 @@ export async function getAllBooks(userId: string): Promise<Book[]> {
 }
 
 // Get a single book by ID
-export async function getBookById(userId: string, bookId: string): Promise<Book | null> {
-  const { data, error } = await supabase
+export async function getBookById(userId: string, bookId: string) {
+  const { data: book, error } = await supabase
     .from('books')
-    .select('*')
-    .eq('userId', userId)
+    .select('*') // ✅ This should include pdf_url
+    // OR explicitly select:
+    // .select('id, title, author, pdf_url, coverUrl, status, rating, genre, pageCount, isbn, publishedDate, dateAdded, description, notes, userId')
     .eq('id', bookId)
-    .single()
+    .eq('userId', userId)
+    .single();
 
   if (error) {
-    if (error.code !== 'PGRST116') { // PGRST116: Row not found
-      console.error('Error fetching book:', error)
-    }
-    return null
+    console.error("getBookById error:", error);
+    return null;
   }
 
-  return data
+  return book;
 }
 
 // Add a new book
@@ -124,17 +124,6 @@ export async function updateBook(userId: string, bookId: string, updates: Partia
 
 // Delete a book
 export async function deleteBook(userId: string, bookId: string): Promise<void> {
-<<<<<<< HEAD
-=======
-  // First, delete the PDF if it exists
-  try {
-    await deleteBookPDF(bookId)
-  } catch (error) {
-    console.error('Error deleting PDF:', error)
-    // Continue with book deletion even if PDF deletion fails
-  }
-
->>>>>>> 2f75a4ed3c69e1c7f8d4bfb9879c4efa2a356551
   const { error } = await supabase
     .from('books')
     .delete()
