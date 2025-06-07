@@ -1,335 +1,344 @@
-"use client"
-
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { useUser } from "@clerk/nextjs"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
-import { Button } from "@/components/ui/button"
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { toast } from "@/components/ui/use-toast"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { uploadBookPDF } from "@/lib/storage-service"
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
-const ACCEPTED_FILE_TYPES = ["application/pdf"]
-
-const bookFormSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  author: z.string().min(1, "Author is required"),
-  isbn: z.string().optional(),
-  coverUrl: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
-  pdfFile: z.instanceof(File).optional(),
-  description: z.string().optional(),
-  genre: z.string().optional(),
-  pageCount: z.coerce.number().int().positive().optional(),
-  publishedDate: z.string().optional(),
-  status: z.enum(["reading", "completed", "want-to-read"]),
-  rating: z.coerce.number().min(0).max(5).optional(),
-  notes: z.string().optional(),
-})
-
-type BookFormValues = z.infer<typeof bookFormSchema>
+'use client'
+import React, { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useUser } from '@clerk/nextjs'
+import { supabase } from '@/lib/supabase'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ArrowLeft, Loader2, Upload, FileText } from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function AddBookPage() {
-  const { user } = useUser()
   const router = useRouter()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [pdfPreview, setPdfPreview] = useState<string | null>(null)
-
-  const form = useForm<BookFormValues>({
-    resolver: zodResolver(bookFormSchema),
-    defaultValues: {
-      title: "",
-      author: "",
-      isbn: "",
-      coverUrl: "",
-      description: "",
-      genre: "",
-      status: "want-to-read",
-      notes: "",
-    },
+  const { user } = useUser()
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    title: '',
+    author: '',
+    isbn: '',
+    coverUrl: '',
+    description: '',
+    genre: '',
+    pageCount: '',
+    publishedDate: '',
+    status: 'want-to-read' as const,
+    rating: '',
+    notes: ''
   })
 
-  const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      if (file.size > MAX_FILE_SIZE) {
-        toast({
-          title: "Error",
-          description: "File size must be less than 10MB",
-          variant: "destructive",
-        })
+      if (file.type !== 'application/pdf') {
+        toast.error('Please select a PDF file')
         return
       }
-      if (!ACCEPTED_FILE_TYPES.includes(file.type)) {
-        toast({
-          title: "Error",
-          description: "Only PDF files are allowed",
-          variant: "destructive",
-        })
+      if (file.size > 50 * 1024 * 1024) {
+        toast.error('File size must be less than 50MB')
         return
       }
-      form.setValue("pdfFile", file)
-      setPdfPreview(URL.createObjectURL(file))
+      setSelectedFile(file)
+      toast.success('PDF file selected')
     }
   }
 
-  async function onSubmit(data: BookFormValues) {
-    if (!user) return
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    // Debug environment variables
+    console.log('Environment check:', {
+      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.substring(0, 20) + '...'
+    })
+    
+    if (!selectedFile) {
+      toast.error('Please select a PDF file to upload')
+      return
+    }
 
-    setIsSubmitting(true)
+    if (!user) {
+      toast.error('Please sign in to add books')
+      return
+    }
+
+    if (!formData.title.trim() || !formData.author.trim()) {
+      toast.error('Title and author are required')
+      return
+    }
+
+    setLoading(true)
 
     try {
-      // First, create the book without PDF
-      const response = await fetch("/api/books", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...data,
-          pdfFile: undefined, // Remove the file from the JSON
-        }),
-      })
+      // Step 1: Insert book record first
+      const { data: bookData, error: bookError } = await supabase
+        .from('books')
+        .insert({
+          userId: user.id,
+          title: formData.title.trim(),
+          author: formData.author.trim(),
+          isbn: formData.isbn.trim() || null,
+          coverUrl: formData.coverUrl.trim() || null,
+          description: formData.description.trim() || null,
+          genre: formData.genre.trim() || null,
+          pageCount: formData.pageCount ? parseInt(formData.pageCount) : null,
+          publishedDate: formData.publishedDate.trim() || null,
+          status: formData.status,
+          rating: formData.rating ? parseInt(formData.rating) : null,
+          notes: formData.notes.trim() || null
+        })
+        .select('id')
+        .single()
 
-      const responseData = await response.json()
-
-      if (!response.ok) {
-        throw new Error(responseData.error || "Failed to add book")
+      if (bookError) {
+        console.error('Book insert error:', bookError)
+        throw new Error(`Failed to save book: ${bookError.message}`)
       }
 
-      const book = responseData
+      console.log('Book created with ID:', bookData.id)
 
-      // If there's a PDF file, upload it
-      if (data.pdfFile) {
-        try {
-          const pdfUrl = await uploadBookPDF(data.pdfFile, user.id, book.id)
-          
-          // Update the book with the PDF URL
-          const updateResponse = await fetch(`/api/books/${book.id}`, {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ pdfUrl }),
-          })
+      // Step 2: Upload PDF with simpler naming
+      const fileExtension = selectedFile.name.split('.').pop()
+      const fileName = `${user.id}-${bookData.id}.${fileExtension}`
+      
+      console.log('Uploading file with name:', fileName)
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('books-pdf')
+        .upload(fileName, selectedFile, {
+          upsert: true,
+          contentType: 'application/pdf'
+        })
 
-          if (!updateResponse.ok) {
-            console.error("Failed to update book with PDF URL")
-          }
-        } catch (error) {
-          console.error("Error uploading PDF:", error)
-          toast({
-            title: "Warning",
-            description: "Book was added but PDF upload failed. You can try uploading the PDF later.",
-            variant: "destructive",
-          })
-        }
+      if (uploadError) {
+        console.error('Upload error:', uploadError)
+        throw new Error(`Failed to upload PDF: ${uploadError.message}`)
       }
 
-      toast({
-        title: "Book added",
-        description: `${data.title} has been added to your library.`,
-      })
+      console.log('File uploaded successfully:', uploadData)
 
-      router.push("/books")
-      router.refresh()
-    } catch (error) {
-      console.error("Error adding book:", error)
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to add book. Please try again.",
-        variant: "destructive",
-      })
+      // Step 3: Get public URL and update book record
+      const { data: urlData } = supabase.storage
+        .from('books-pdf')
+        .getPublicUrl(fileName)
+
+      console.log('Public URL:', urlData.publicUrl)
+
+      const { error: updateError } = await supabase
+        .from('books')
+        .update({ pdf_url: urlData.publicUrl })
+        .eq('id', bookData.id)
+
+      if (updateError) {
+        console.error('Update error:', updateError)
+        throw new Error(`Failed to update book with PDF URL: ${updateError.message}`)
+      }
+
+      toast.success('Book and PDF uploaded successfully!')
+      router.push('/books')
+
+    } catch (error: any) {
+      console.error('Error:', error)
+      toast.error(error.message || 'Failed to add book')
     } finally {
-      setIsSubmitting(false)
+      setLoading(false)
     }
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target
+    setFormData(prev => ({ ...prev, [name]: value }))
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <Card>
+    <div className="max-w-2xl mx-auto p-6">
+      <div className="mb-6">
+        <Button 
+          variant="ghost" 
+          onClick={() => router.push('/books')}
+          className="mb-4"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Books
+        </Button>
+        <h1 className="text-3xl font-bold">Add New Book</h1>
+        <p className="text-muted-foreground">Add a new book with PDF file to your virtual library.</p>
+      </div>
+
+      <Card className="max-w-2xl">
         <CardHeader>
-          <CardTitle>Add a New Book</CardTitle>
-          <CardDescription>Add details about a book to your personal library</CardDescription>
+          <CardTitle>Book Details & PDF Upload</CardTitle>
+          <CardDescription>
+            Enter the book information and upload the PDF file. Fields with * are required.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* PDF Upload Section */}
+            <div className="space-y-4">
+              <Label className="text-base font-medium">PDF File *</Label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+                <div className="text-center">
+                  <FileText className="mx-auto h-12 w-12 text-gray-400" />
+                  <div className="mt-4">
+                    <Label
+                      htmlFor="pdf-upload"
+                      className="cursor-pointer inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      {selectedFile ? 'Change PDF' : 'Upload PDF'}
+                    </Label>
+                    <input
+                      id="pdf-upload"
+                      type="file"
+                      accept=".pdf"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </div>
+                  {selectedFile && (
+                    <p className="mt-2 text-sm text-green-600">
+                      Selected: {selectedFile.name} ({Math.round(selectedFile.size / 1024 / 1024 * 100) / 100} MB)
+                    </p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    PDF files only, max 50MB
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Title and Author */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">Title *</Label>
+                <Input
+                  id="title"
                   name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Title</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Book title" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  value={formData.title}
+                  onChange={handleInputChange}
+                  required
                 />
-
-                <FormField
-                  control={form.control}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="author">Author *</Label>
+                <Input
+                  id="author"
                   name="author"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Author</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Author name" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  value={formData.author}
+                  onChange={handleInputChange}
+                  required
                 />
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
+            {/* Optional Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="isbn">ISBN</Label>
+                <Input
+                  id="isbn"
                   name="isbn"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>ISBN</FormLabel>
-                      <FormControl>
-                        <Input placeholder="ISBN (optional)" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="coverUrl"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Cover Image URL</FormLabel>
-                      <FormControl>
-                        <Input placeholder="https://..." {...field} />
-                      </FormControl>
-                      <FormDescription>Link to the book cover image</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  value={formData.isbn}
+                  onChange={handleInputChange}
                 />
               </div>
-
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
+              <div className="space-y-2">
+                <Label htmlFor="genre">Genre</Label>
+                <Input
+                  id="genre"
                   name="genre"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Genre</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Fiction, Non-fiction, etc." {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="pageCount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Page Count</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="Number of pages" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  value={formData.genre}
+                  onChange={handleInputChange}
                 />
               </div>
+            </div>
 
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Reading Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="reading">Currently Reading</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="want-to-read">Want to Read</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="pageCount">Page Count</Label>
+                <Input
+                  id="pageCount"
+                  name="pageCount"
+                  type="number"
+                  value={formData.pageCount}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="status">Reading Status *</Label>
+                <select 
+                  name="status"
+                  value={formData.status} 
+                  onChange={handleInputChange}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="want-to-read">Want to Read</option>
+                  <option value="reading">Currently Reading</option>
+                  <option value="completed">Completed</option> {/* Changed to match database */}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="coverUrl">Cover Image URL</Label>
+              <Input
+                id="coverUrl"
+                name="coverUrl"
+                type="url"
+                value={formData.coverUrl}
+                onChange={handleInputChange}
+                placeholder="https://example.com/book-cover.jpg"
               />
+            </div>
 
-              <FormField
-                control={form.control}
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
                 name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="Book description" className="resize-none" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                value={formData.description}
+                onChange={handleInputChange}
+                rows={3}
+                placeholder="What's this book about?"
               />
+            </div>
 
-              <FormField
-                control={form.control}
+            <div className="space-y-2">
+              <Label htmlFor="notes">Personal Notes</Label>
+              <Textarea
+                id="notes"
                 name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Personal Notes</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="Your thoughts about this book" className="resize-none" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                value={formData.notes}
+                onChange={handleInputChange}
+                rows={3}
+                placeholder="Your thoughts, quotes, or notes about this book..."
               />
+            </div>
 
-              <FormField
-                control={form.control}
-                name="pdfFile"
-                render={({ field: { value, onChange, ...field } }) => (
-                  <FormItem>
-                    <FormLabel>Book PDF</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="file"
-                        accept=".pdf"
-                        onChange={handlePdfChange}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Upload a PDF version of the book (max 10MB)
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
+            <div className="flex gap-4 pt-4">
+              <Button type="submit" disabled={loading || !selectedFile || !formData.title.trim() || !formData.author.trim()}>
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Adding Book...
+                  </>
+                ) : (
+                  'Add Book & Upload PDF'
                 )}
-              />
-
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Adding..." : "Add Book"}
               </Button>
-            </form>
-          </Form>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => router.push('/books')}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
         </CardContent>
       </Card>
     </div>

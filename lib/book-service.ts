@@ -1,5 +1,4 @@
 import { supabase, type Book } from "./supabase"
-import { deleteBookPDF } from './storage-service'
 
 // Get all books for a user
 export async function getAllBooks(userId: string): Promise<Book[]> {
@@ -122,14 +121,6 @@ export async function updateBook(userId: string, bookId: string, updates: Partia
 
 // Delete a book
 export async function deleteBook(userId: string, bookId: string): Promise<void> {
-  // First, delete the PDF if it exists
-  try {
-    await deleteBookPDF(userId, bookId)
-  } catch (error) {
-    console.error('Error deleting PDF:', error)
-    // Continue with book deletion even if PDF deletion fails
-  }
-
   const { error } = await supabase
     .from('books')
     .delete()

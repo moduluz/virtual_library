@@ -1,7 +1,18 @@
 import { NextResponse } from "next/server"
 import { currentUser } from "@clerk/nextjs/server"
-import { addBook } from "@/lib/book-service"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
+
+// Create a service role client for server-side operations
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!, // This bypasses RLS
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  }
+)
 
 export async function POST(request: Request) {
   try {
@@ -12,7 +23,7 @@ export async function POST(request: Request) {
     }
 
     // Create users table if it doesn't exist
-    const { error: createTableError } = await supabase.rpc('create_users_table_if_not_exists')
+    const { error: createTableError } = await supabaseAdmin.rpc('create_users_table_if_not_exists')
     
     if (createTableError) {
       console.error("Error creating users table:", createTableError)
@@ -20,7 +31,7 @@ export async function POST(request: Request) {
     }
 
     // Ensure user exists in our database
-    const { error: userError } = await supabase
+    const { error: userError } = await supabaseAdmin
       .from('users')
       .upsert({
         id: user.id,
@@ -36,9 +47,45 @@ export async function POST(request: Request) {
 
     const data = await request.json()
     
+    // Add the userId to the book data
+    const bookData = {
+      ...data,
+      userId: user.id, // Explicitly add the userId
+      id: crypto.randomUUID(),
+      dateAdded: new Date().toISOString(),
+    }
+    
     try {
-      const book = await addBook(user.id, data)
-      return NextResponse.json(book)
+      // Use service role client to insert directly
+      const { data: insertedBook, error } = await supabaseAdmin
+        .from('books')
+        .insert(bookData)
+        .select()
+        .single()
+      
+      if (error) {
+        console.error('Supabase error adding book:', error)
+        throw new Error(`Database error: ${error.message}`)
+      }
+
+      if (!insertedBook) {
+        throw new Error('Failed to create book: No data returned')
+      }
+
+      console.log('Successfully added book:', insertedBook)
+      
+      // Delete stats cache
+      try {
+        await supabaseAdmin
+          .from('reading_stats')
+          .delete()
+          .eq('userId', user.id)
+      } catch (error) {
+        console.error('Error deleting stats cache:', error)
+        // Don't throw here, as the book was successfully added
+      }
+
+      return NextResponse.json(insertedBook)
     } catch (error) {
       console.error("Error adding book:", error)
       return NextResponse.json(

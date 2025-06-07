@@ -8,14 +8,15 @@ import Link from "next/link"
 import BookDeleteButton from "./book-delete-button"
 import { PDFViewer } from "@/components/pdf-viewer"
 
-export default async function BookDetailPage({ params }: { params: { id: string } }) {
+export default async function BookDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params // Await params first
   const user = await currentUser()
 
   if (!user) {
     redirect("/sign-in")
   }
 
-  const book = await getBookById(user.id, params.id)
+  const book = await getBookById(user.id, id)
 
   if (!book) {
     notFound()
