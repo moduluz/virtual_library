@@ -1,364 +1,288 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { useUser } from "@clerk/nextjs"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
-import { Button } from "@/components/ui/button"
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { toast } from "@/components/ui/use-toast"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { uploadBookPDF } from "@/lib/storage-service"
+import { useState, ChangeEvent, FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useUser, useAuth } from "@clerk/nextjs";
+import { supabase, createClerkSupabaseClient } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import Link from "next/link";
+import { ArrowLeft, Loader2, Upload, FileText } from "lucide-react";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ACCEPTED_FILE_TYPES = ["application/pdf"]
 
-const bookFormSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  author: z.string().min(1, "Author is required"),
-  isbn: z.string().optional(),
-  coverUrl: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
-  pdfFile: z.instanceof(File).optional(),
-  description: z.string().optional(),
-  genre: z.string().optional(),
-  pageCount: z.coerce.number().int().positive().optional(),
-  publishedDate: z.string().optional(),
-  status: z.enum(["reading", "completed", "want-to-read"]),
-  rating: z.coerce.number().min(0).max(5).optional(),
-  notes: z.string().optional(),
-})
-
-type BookFormValues = z.infer<typeof bookFormSchema>
+// Define the shape of your form data
+interface BookFormData {
+  title: string;
+  author: string;
+  isbn: string;
+  coverUrl: string;
+  description: string;
+  genre: string;
+  pageCount: string; // Keep as string for form input, parse to number on submit
+  publishedDate: string;
+  status: 'want-to-read' | 'reading' | 'completed';
+  rating: string; // Keep as string for form input, parse to number on submit
+  notes: string;
+}
 
 export default function AddBookPage() {
-  const router = useRouter()
-  const { user } = useUser()
-  const router = useRouter()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [pdfPreview, setPdfPreview] = useState<string | null>(null)
+  const { user } = useUser();
+  const { getToken } = useAuth(); // For Clerk-authenticated Supabase client
+  const router = useRouter(); // Declare router once
 
-  const form = useForm<BookFormValues>({
-    resolver: zodResolver(bookFormSchema),
-    defaultValues: {
-      title: "",
-      author: "",
-      isbn: "",
-      coverUrl: "",
-      description: "",
-      genre: "",
-      status: "want-to-read",
-      notes: "",
-    },
-  })
+  const [formData, setFormData] = useState<BookFormData>({
+    title: '',
+    author: '',
+    isbn: '',
+    coverUrl: '',
+    description: '',
+    genre: '',
+    pageCount: '',
+    publishedDate: '',
+    status: 'want-to-read',
+    rating: '',
+    notes: '',
+  });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      if (file.type !== 'application/pdf') {
-        toast.error('Please select a PDF file')
-        return
-      }
-      if (file.size > 50 * 1024 * 1024) {
-        toast.error('File size must be less than 50MB')
-        return
-      }
-      setSelectedFile(file)
-      toast.success('PDF file selected')
+  const handleInputChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    } else {
+      setSelectedFile(null);
     }
-  }
+  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    // Debug environment variables
-    console.log('Environment check:', {
-      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-      key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.substring(0, 20) + '...'
-    })
-    
-    if (!selectedFile) {
-      toast.error('Please select a PDF file to upload')
-      return
-    }
-
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     if (!user) {
-      toast.error('Please sign in to add books')
-      return
+      toast.error('You must be logged in to add a book.');
+      return;
+    }
+    if (!formData.title || !formData.author) {
+      toast.error('Title and Author are required.');
+      return;
     }
 
-    if (!formData.title.trim() || !formData.author.trim()) {
-      toast.error('Title and author are required')
-      return
-    }
-
-    setLoading(true)
+    setLoading(true);
+    let pdfUrl: string | undefined = undefined;
 
     try {
-      // First, create the book without PDF
-      const response = await fetch("/api/books", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...data,
-          pdfFile: undefined, // Remove the file from the JSON
-        }),
-      })
+      // 1. Upload PDF if selected (using Clerk-authenticated client)
+      if (selectedFile) {
+        const supabaseClientWithClerk = createClerkSupabaseClient(getToken);
+        const fileName = `${user.id}-${Date.now()}-${selectedFile.name}`; // Unique file name
+        const { data: uploadData, error: uploadError } = await supabaseClientWithClerk.storage
+          .from('books-pdf') // Your PDF bucket
+          .upload(fileName, selectedFile, {
+            cacheControl: '3600',
+            upsert: false, // Or true if you want to overwrite
+            contentType: selectedFile.type,
+          });
 
-      const responseData = await response.json()
-
-      if (bookError) {
-        console.error('Book insert error:', bookError)
-        throw new Error(`Failed to save book: ${bookError.message}`)
-      }
-
-      const book = responseData
-
-      // If there's a PDF file, upload it
-      if (data.pdfFile) {
-        try {
-          const pdfUrl = await uploadBookPDF(data.pdfFile, user.id, book.id)
-          
-          // Update the book with the PDF URL
-          const updateResponse = await fetch(`/api/books/${book.id}`, {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ pdfUrl }),
-          })
-
-          if (!updateResponse.ok) {
-            console.error("Failed to update book with PDF URL")
-          }
-        } catch (error) {
-          console.error("Error uploading PDF:", error)
-          toast({
-            title: "Warning",
-            description: "Book was added but PDF upload failed. You can try uploading the PDF later.",
-            variant: "destructive",
-          })
+        if (uploadError) {
+          console.error('PDF Upload Error:', uploadError);
+          toast.error(`PDF Upload Failed: ${uploadError.message}`);
+          setLoading(false);
+          return;
         }
+        
+        const { data: urlData } = supabaseClientWithClerk.storage
+          .from('books-pdf')
+          .getPublicUrl(fileName);
+        pdfUrl = urlData?.publicUrl;
       }
 
-      toast({
-        title: "Book added",
-        description: `${data.title} has been added to your library.`,
-      })
+      // 2. Create book record in Supabase
+      const bookDataToInsert = {
+        userId: user.id,
+        title: formData.title.trim(),
+        author: formData.author.trim(),
+        isbn: formData.isbn.trim() || null,
+        coverUrl: formData.coverUrl.trim() || null,
+        description: formData.description.trim() || null,
+        genre: formData.genre.trim() || null,
+        pageCount: formData.pageCount ? parseInt(formData.pageCount) : null,
+        publishedDate: formData.publishedDate.trim() || null,
+        status: formData.status,
+        rating: formData.rating ? parseInt(formData.rating) : null,
+        notes: formData.notes.trim() || null,
+        pdf_url: pdfUrl, // Add the PDF URL here
+        dateAdded: new Date().toISOString(),
+      };
 
-      router.push("/books")
-      router.refresh()
-    } catch (error) {
-      console.error("Error adding book:", error)
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to add book. Please try again.",
-        variant: "destructive",
-      })
+      // Use the plain Supabase client for database insert, RLS will apply based on JWT
+      const { data: bookInsertData, error: bookInsertError } = await supabase
+        .from('books')
+        .insert([bookDataToInsert])
+        .select()
+        .single();
+
+      if (bookInsertError) {
+        console.error('Book Insert Error:', bookInsertError);
+        toast.error(`Failed to add book: ${bookInsertError.message}`);
+        // If book insert fails after PDF upload, you might want to delete the orphaned PDF
+        if (pdfUrl && selectedFile) {
+            const supabaseClientWithClerk = createClerkSupabaseClient(getToken);
+            const fileName = pdfUrl.substring(pdfUrl.lastIndexOf('/') + 1);
+            await supabaseClientWithClerk.storage.from('books-pdf').remove([fileName]);
+            console.log("Orphaned PDF deleted after failed book insert.");
+        }
+        setLoading(false);
+        return;
+      }
+
+      toast.success('Book added successfully!');
+      setSelectedFile(null); // Clear selected file
+      setFormData({ // Reset form
+        title: '', author: '', isbn: '', coverUrl: '', description: '',
+        genre: '', pageCount: '', publishedDate: '', status: 'want-to-read',
+        rating: '', notes: '',
+      });
+      router.push(`/books/${bookInsertData.id}`); // Navigate to the new book's page
+
+    } catch (error: any) {
+      console.error('Error adding book:', error);
+      toast.error(`An unexpected error occurred: ${error.message}`);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
-  }
+  };
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <div className="mb-6">
-        <Button 
-          variant="ghost" 
-          onClick={() => router.push('/books')}
-          className="mb-4"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Books
-        </Button>
-        <h1 className="text-3xl font-bold">Add New Book</h1>
-        <p className="text-muted-foreground">Add a new book with PDF file to your virtual library.</p>
-      </div>
+    <div className="container mx-auto p-4">
+      {/* Back Button */}
+      <Link href="/books" className="mb-4 inline-flex items-center text-blue-600 hover:underline">
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Back to Books
+      </Link>
+      <h1 className="text-2xl font-bold mb-6">Add New Book</h1>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Title Field */}
+        <div>
+          <Label htmlFor="title">Title</Label>
+          <Input type="text" name="title" id="title" value={formData.title} onChange={handleInputChange} required className="mt-1" />
+        </div>
 
-      <Card className="max-w-2xl">
-        <CardHeader>
-          <CardTitle>Book Details & PDF Upload</CardTitle>
-          <CardDescription>
-            Enter the book information and upload the PDF file. Fields with * are required.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* PDF Upload Section */}
-            <div className="space-y-4">
-              <Label className="text-base font-medium">PDF File *</Label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
-                <div className="text-center">
-                  <FileText className="mx-auto h-12 w-12 text-gray-400" />
-                  <div className="mt-4">
-                    <Label
-                      htmlFor="pdf-upload"
-                      className="cursor-pointer inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                    >
-                      <Upload className="h-4 w-4 mr-2" />
-                      {selectedFile ? 'Change PDF' : 'Upload PDF'}
-                    </Label>
-                    <input
-                      id="pdf-upload"
-                      type="file"
-                      accept=".pdf"
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
-                  </div>
-                  {selectedFile && (
-                    <p className="mt-2 text-sm text-green-600">
-                      Selected: {selectedFile.name} ({Math.round(selectedFile.size / 1024 / 1024 * 100) / 100} MB)
-                    </p>
-                  )}
-                  <p className="mt-1 text-xs text-gray-500">
-                    PDF files only, max 50MB
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Title and Author */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Title *</Label>
-                <Input
-                  id="title"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="author">Author *</Label>
-                <Input
-                  id="author"
-                  name="author"
-                  value={formData.author}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Optional Fields */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="isbn">ISBN</Label>
-                <Input
-                  id="isbn"
-                  name="isbn"
-                  value={formData.isbn}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="genre">Genre</Label>
-                <Input
-                  id="genre"
-                  name="genre"
-                  value={formData.genre}
-                  onChange={handleInputChange}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="pageCount">Page Count</Label>
-                <Input
-                  id="pageCount"
-                  name="pageCount"
-                  type="number"
-                  value={formData.pageCount}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="status">Reading Status *</Label>
-                <select 
-                  name="status"
-                  value={formData.status} 
-                  onChange={handleInputChange}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  <option value="want-to-read">Want to Read</option>
-                  <option value="reading">Currently Reading</option>
-                  <option value="completed">Completed</option> {/* Changed to match database */}
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="coverUrl">Cover Image URL</Label>
-              <Input
-                id="coverUrl"
-                name="coverUrl"
-                type="url"
-                value={formData.coverUrl}
-                onChange={handleInputChange}
-                placeholder="https://example.com/book-cover.jpg"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                rows={3}
-                placeholder="What's this book about?"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="notes">Personal Notes</Label>
-              <Textarea
-                id="notes"
-                name="notes"
-                value={formData.notes}
-                onChange={handleInputChange}
-                rows={3}
-                placeholder="Your thoughts, quotes, or notes about this book..."
-              />
-            </div>
-
-            <div className="flex gap-4 pt-4">
-              <Button type="submit" disabled={loading || !selectedFile || !formData.title.trim() || !formData.author.trim()}>
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Adding Book...
-                  </>
-                ) : (
-                  'Add Book & Upload PDF'
+        {/* Author Field */}
+        <div>
+          <Label htmlFor="author">Author</Label>
+          <Input type="text" name="author" id="author" value={formData.author} onChange={handleInputChange} required className="mt-1" />
+        </div>
+        
+        {/* PDF Upload Field */}
+        <div className="space-y-2">
+            <Label htmlFor="pdfFile">Book PDF (Optional)</Label>
+            <div className="flex items-center space-x-2">
+                <Label htmlFor="pdfFile" className="flex items-center px-4 py-2 bg-white text-blue-500 rounded-md shadow-sm tracking-wide uppercase border border-blue-500 cursor-pointer hover:bg-blue-500 hover:text-white">
+                    <Upload className="mr-2 h-5 w-5" />
+                    <span>Select PDF</span>
+                    <Input id="pdfFile" name="pdfFile" type="file" className="hidden" accept=".pdf" onChange={handleFileChange} />
+                </Label>
+                {selectedFile && (
+                    <div className="flex items-center space-x-2 p-2 border rounded-md">
+                        <FileText className="h-5 w-5 text-gray-500" />
+                        <span className="text-sm text-gray-700">{selectedFile.name}</span>
+                        <button type="button" onClick={() => setSelectedFile(null)} className="text-red-500 hover:text-red-700 text-xs">Clear</button>
+                    </div>
                 )}
-              </Button>
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => router.push('/books')}
-              >
-                Cancel
-              </Button>
             </div>
-          </form>
-        </CardContent>
-      </Card>
+            {selectedFile && <p className="text-xs text-gray-500 mt-1">Selected: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)</p>}
+        </div>
+
+
+        {/* ISBN Field */}
+        <div>
+          <Label htmlFor="isbn">ISBN</Label>
+          <Input type="text" name="isbn" id="isbn" value={formData.isbn} onChange={handleInputChange} className="mt-1" />
+        </div>
+
+        {/* Cover URL Field */}
+        <div>
+          <Label htmlFor="coverUrl">Cover Image URL</Label>
+          <Input type="url" name="coverUrl" id="coverUrl" value={formData.coverUrl} onChange={handleInputChange} className="mt-1" />
+        </div>
+        
+        {/* Description Field */}
+        <div>
+          <Label htmlFor="description">Description</Label>
+          <Textarea name="description" id="description" value={formData.description} onChange={handleInputChange} rows={4} className="mt-1" />
+        </div>
+
+        {/* Genre Field */}
+        <div>
+          <Label htmlFor="genre">Genre</Label>
+          <Input type="text" name="genre" id="genre" value={formData.genre} onChange={handleInputChange} className="mt-1" />
+        </div>
+
+        {/* Page Count Field */}
+        <div>
+          <Label htmlFor="pageCount">Page Count</Label>
+          <Input type="number" name="pageCount" id="pageCount" value={formData.pageCount} onChange={handleInputChange} className="mt-1" />
+        </div>
+
+        {/* Published Date Field */}
+        <div>
+          <Label htmlFor="publishedDate">Published Date</Label>
+          <Input type="date" name="publishedDate" id="publishedDate" value={formData.publishedDate} onChange={handleInputChange} className="mt-1" />
+        </div>
+
+        {/* Status Field */}
+        <div>
+          <Label htmlFor="status">Status</Label>
+          <Select name="status" value={formData.status} onValueChange={(value) => handleSelectChange('status', value)}>
+            <SelectTrigger className="w-full mt-1">
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="want-to-read">Want to Read</SelectItem>
+              <SelectItem value="reading">Reading</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Rating Field */}
+        <div>
+          <Label htmlFor="rating">Rating (1-5)</Label>
+          <Input type="number" name="rating" id="rating" value={formData.rating} onChange={handleInputChange} min="1" max="5" step="1" className="mt-1" />
+        </div>
+
+        {/* Notes Field */}
+        <div>
+          <Label htmlFor="notes">Notes</Label>
+          <Textarea name="notes" id="notes" value={formData.notes} onChange={handleInputChange} rows={3} className="mt-1" />
+        </div>
+
+        <Button type="submit" disabled={loading || !formData.title || !formData.author} className="w-full">
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Adding Book...
+            </>
+          ) : (
+            'Add Book'
+          )}
+        </Button>
+      </form>
     </div>
-  )
+  );
 }
