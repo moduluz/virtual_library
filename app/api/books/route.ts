@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { currentUser } from "@clerk/nextjs/server"
+<<<<<<< HEAD
 import { createClient } from "@supabase/supabase-js"
 
 // Create a service role client for server-side operations
@@ -13,6 +14,9 @@ const supabaseAdmin = createClient(
     }
   }
 )
+=======
+import { addBook } from "@/lib/book-service"
+>>>>>>> 2f75a4ed3c69e1c7f8d4bfb9879c4efa2a356551
 
 export async function POST(request: Request) {
   try {
@@ -22,6 +26,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+<<<<<<< HEAD
     // Create users table if it doesn't exist
     const { error: createTableError } = await supabaseAdmin.rpc('create_users_table_if_not_exists')
     
@@ -53,6 +58,21 @@ export async function POST(request: Request) {
       userId: user.id, // Explicitly add the userId
       id: crypto.randomUUID(),
       dateAdded: new Date().toISOString(),
+=======
+    const data = await request.json()
+    
+    // Sanitize and validate rating
+    if (data.rating !== undefined) {
+      if (data.rating === null || data.rating === "" || typeof data.rating === "undefined") {
+        data.rating = null
+      } else {
+        const ratingNum = Number(data.rating)
+        if (isNaN(ratingNum) || ratingNum < 0 || ratingNum > 5) {
+          return NextResponse.json({ error: "Rating must be a number between 0 and 5 or null" }, { status: 400 })
+        }
+        data.rating = ratingNum
+      }
+>>>>>>> 2f75a4ed3c69e1c7f8d4bfb9879c4efa2a356551
     }
     
     try {

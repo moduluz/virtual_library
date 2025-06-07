@@ -51,23 +51,6 @@ export async function addBook(userId: string, book: Omit<Book, 'id' | 'userId' |
   
   console.log('Prepared book data:', newBook)
 
-  // Try to verify the user exists, but continue if it fails
-  try {
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('id', userId)
-      .single()
-
-    if (userError) {
-      console.error('Error verifying user:', userError)
-      // Continue anyway, as we can still add the book
-    }
-  } catch (error) {
-    console.error('Error in user verification:', error)
-    // Continue anyway, as we can still add the book
-  }
-
   const { data, error } = await supabase
     .from('books')
     .insert(newBook)
@@ -102,14 +85,34 @@ export async function addBook(userId: string, book: Omit<Book, 'id' | 'userId' |
 
 // Update a book
 export async function updateBook(userId: string, bookId: string, updates: Partial<Book>): Promise<void> {
+  // Clean up the updates object
+  const cleanedUpdates = { ...updates }
+  
+  // Handle rating validation
+  if (cleanedUpdates.rating !== undefined) {
+    // Convert to number and validate
+    const rating = Number(cleanedUpdates.rating)
+    if (isNaN(rating)) {
+      cleanedUpdates.rating = null
+    } else if (rating < 0 || rating > 5) {
+      throw new Error('Rating must be between 0 and 5')
+    } else {
+      cleanedUpdates.rating = rating
+    }
+  }
+
+  // Debug log
+  console.log('Updating book with cleanedUpdates:', cleanedUpdates);
+
   const { error } = await supabase
     .from('books')
-    .update(updates)
+    .update(cleanedUpdates)
     .eq('id', bookId)
     .eq('userId', userId)
   
   if (error) {
     console.error('Error updating book:', error)
+    throw new Error(error.message)
   }
   
   // Delete stats cache to force recalculation
@@ -121,6 +124,17 @@ export async function updateBook(userId: string, bookId: string, updates: Partia
 
 // Delete a book
 export async function deleteBook(userId: string, bookId: string): Promise<void> {
+<<<<<<< HEAD
+=======
+  // First, delete the PDF if it exists
+  try {
+    await deleteBookPDF(bookId)
+  } catch (error) {
+    console.error('Error deleting PDF:', error)
+    // Continue with book deletion even if PDF deletion fails
+  }
+
+>>>>>>> 2f75a4ed3c69e1c7f8d4bfb9879c4efa2a356551
   const { error } = await supabase
     .from('books')
     .delete()

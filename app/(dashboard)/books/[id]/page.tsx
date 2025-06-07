@@ -11,6 +11,7 @@ import { PDFViewer } from "@/components/pdf-viewer"
 export default async function BookDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params // Await params first
   const user = await currentUser()
+  const { id } = await params
 
   if (!user) {
     redirect("/sign-in")

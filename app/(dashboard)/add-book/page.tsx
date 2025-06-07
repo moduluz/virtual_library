@@ -1,33 +1,59 @@
-'use client'
-import React, { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useUser } from '@clerk/nextjs'
-import { supabase } from '@/lib/supabase'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowLeft, Loader2, Upload, FileText } from 'lucide-react'
-import { toast } from 'sonner'
+"use client"
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { useUser } from "@clerk/nextjs"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
+import { z } from "zod"
+import { Button } from "@/components/ui/button"
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { toast } from "@/components/ui/use-toast"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { uploadBookPDF } from "@/lib/storage-service"
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const ACCEPTED_FILE_TYPES = ["application/pdf"]
+
+const bookFormSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  author: z.string().min(1, "Author is required"),
+  isbn: z.string().optional(),
+  coverUrl: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
+  pdfFile: z.instanceof(File).optional(),
+  description: z.string().optional(),
+  genre: z.string().optional(),
+  pageCount: z.coerce.number().int().positive().optional(),
+  publishedDate: z.string().optional(),
+  status: z.enum(["reading", "completed", "want-to-read"]),
+  rating: z.coerce.number().min(0).max(5).optional(),
+  notes: z.string().optional(),
+})
+
+type BookFormValues = z.infer<typeof bookFormSchema>
 
 export default function AddBookPage() {
   const router = useRouter()
   const { user } = useUser()
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    title: '',
-    author: '',
-    isbn: '',
-    coverUrl: '',
-    description: '',
-    genre: '',
-    pageCount: '',
-    publishedDate: '',
-    status: 'want-to-read' as const,
-    rating: '',
-    notes: ''
+  const router = useRouter()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [pdfPreview, setPdfPreview] = useState<string | null>(null)
+
+  const form = useForm<BookFormValues>({
+    resolver: zodResolver(bookFormSchema),
+    defaultValues: {
+      title: "",
+      author: "",
+      isbn: "",
+      coverUrl: "",
+      description: "",
+      genre: "",
+      status: "want-to-read",
+      notes: "",
+    },
   })
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,76 +99,68 @@ export default function AddBookPage() {
     setLoading(true)
 
     try {
-      // Step 1: Insert book record first
-      const { data: bookData, error: bookError } = await supabase
-        .from('books')
-        .insert({
-          userId: user.id,
-          title: formData.title.trim(),
-          author: formData.author.trim(),
-          isbn: formData.isbn.trim() || null,
-          coverUrl: formData.coverUrl.trim() || null,
-          description: formData.description.trim() || null,
-          genre: formData.genre.trim() || null,
-          pageCount: formData.pageCount ? parseInt(formData.pageCount) : null,
-          publishedDate: formData.publishedDate.trim() || null,
-          status: formData.status,
-          rating: formData.rating ? parseInt(formData.rating) : null,
-          notes: formData.notes.trim() || null
-        })
-        .select('id')
-        .single()
+      // First, create the book without PDF
+      const response = await fetch("/api/books", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...data,
+          pdfFile: undefined, // Remove the file from the JSON
+        }),
+      })
+
+      const responseData = await response.json()
 
       if (bookError) {
         console.error('Book insert error:', bookError)
         throw new Error(`Failed to save book: ${bookError.message}`)
       }
 
-      console.log('Book created with ID:', bookData.id)
+      const book = responseData
 
-      // Step 2: Upload PDF with simpler naming
-      const fileExtension = selectedFile.name.split('.').pop()
-      const fileName = `${user.id}-${bookData.id}.${fileExtension}`
-      
-      console.log('Uploading file with name:', fileName)
-      
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('books-pdf')
-        .upload(fileName, selectedFile, {
-          upsert: true,
-          contentType: 'application/pdf'
-        })
+      // If there's a PDF file, upload it
+      if (data.pdfFile) {
+        try {
+          const pdfUrl = await uploadBookPDF(data.pdfFile, user.id, book.id)
+          
+          // Update the book with the PDF URL
+          const updateResponse = await fetch(`/api/books/${book.id}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ pdfUrl }),
+          })
 
-      if (uploadError) {
-        console.error('Upload error:', uploadError)
-        throw new Error(`Failed to upload PDF: ${uploadError.message}`)
+          if (!updateResponse.ok) {
+            console.error("Failed to update book with PDF URL")
+          }
+        } catch (error) {
+          console.error("Error uploading PDF:", error)
+          toast({
+            title: "Warning",
+            description: "Book was added but PDF upload failed. You can try uploading the PDF later.",
+            variant: "destructive",
+          })
+        }
       }
 
-      console.log('File uploaded successfully:', uploadData)
+      toast({
+        title: "Book added",
+        description: `${data.title} has been added to your library.`,
+      })
 
-      // Step 3: Get public URL and update book record
-      const { data: urlData } = supabase.storage
-        .from('books-pdf')
-        .getPublicUrl(fileName)
-
-      console.log('Public URL:', urlData.publicUrl)
-
-      const { error: updateError } = await supabase
-        .from('books')
-        .update({ pdf_url: urlData.publicUrl })
-        .eq('id', bookData.id)
-
-      if (updateError) {
-        console.error('Update error:', updateError)
-        throw new Error(`Failed to update book with PDF URL: ${updateError.message}`)
-      }
-
-      toast.success('Book and PDF uploaded successfully!')
-      router.push('/books')
-
-    } catch (error: any) {
-      console.error('Error:', error)
-      toast.error(error.message || 'Failed to add book')
+      router.push("/books")
+      router.refresh()
+    } catch (error) {
+      console.error("Error adding book:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to add book. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
