@@ -26,7 +26,7 @@ export default function LandingPage() {
               <div className="flex flex-col justify-center space-y-4">
                 <div className="space-y-2">
                   <h1 className="text-3xl font-bold tracking-tighter sm:text-5xl xl:text-6xl/none">
-                    Your Personal Library, Organized
+                    aa gayi phir ghattiya books padhne
                   </h1>
                   <p className="max-w-[600px] text-gray-500 md:text-xl dark:text-gray-400">
                     Track your reading journey, organize your collection, and discover new books with our intuitive
@@ -51,7 +51,7 @@ export default function LandingPage() {
                   <img
                     alt="Library App Screenshot"
                     className="object-cover"
-                    src="/placeholder.svg?height=800&width=600&text=Library+App"
+                    src="https://mmuthgvuifdilpmpusha.supabase.co/storage/v1/object/public/public-assets//WhatsApp%20Image%202025-06-11%20at%2003.36.42_1fce3228.jpg"
                   />
                 </div>
               </div>
