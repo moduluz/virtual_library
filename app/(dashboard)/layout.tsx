@@ -23,7 +23,7 @@ export default async function DashboardLayout({
           <div className="mr-4 hidden md:flex">
             <Link href="/dashboard" className="flex items-center space-x-2">
               <BookOpen className="h-6 w-6 text-purple-600" />
-              <span className="font-bold">LibraryApp</span>
+              <span className="font-bold">CHICHICHUCHU</span>
             </Link>
           </div>
           <MainNav />
