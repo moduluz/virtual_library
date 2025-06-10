@@ -154,7 +154,7 @@ export default function AnalyticsPage() {
         return (
           <div className="bg-card p-6 rounded-lg shadow mt-4"> {/* Replaced Card */}
             <div className="mb-4"> {/* Replaced CardHeader */}
-              <h3 className="text-lg font-semibold">2024 Reading Goal</h3> {/* Replaced CardTitle */}
+              <h3 className="text-lg font-semibold">2025 Reading Goal</h3> {/* Replaced CardTitle */}
               <p className="text-sm text-muted-foreground">
                 Track your progress toward your annual reading goal
               </p> {/* Replaced CardDescription */}
