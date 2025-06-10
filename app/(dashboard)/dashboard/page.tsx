@@ -16,10 +16,12 @@ async function getReadingStats(userId: string): Promise<ReadingStats> {
   if (stats && !statsError) return stats
 
   // If no stats exist, calculate them
-  const { data: books = [], error: booksError } = await supabase
+  const { data, error: booksError } = await supabase
     .from('books')
     .select('*')
     .eq('userId', userId)
+
+  const books = data ?? [];
 
   if (booksError) {
     console.error('Error fetching books:', booksError)
@@ -58,7 +60,7 @@ async function getReadingStats(userId: string): Promise<ReadingStats> {
 }
 
 async function getRecentBooks(userId: string): Promise<Book[]> {
-  const { data: books = [], error } = await supabase
+  const { data, error } = await supabase
     .from('books')
     .select('*')
     .eq('userId', userId)
@@ -70,7 +72,7 @@ async function getRecentBooks(userId: string): Promise<Book[]> {
     return []
   }
 
-  return books
+  return data ?? []
 }
 
 export default async function DashboardPage() {

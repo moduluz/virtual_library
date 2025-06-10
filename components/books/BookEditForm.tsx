@@ -240,13 +240,14 @@ export default function BookEditForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Published Date</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Read On Date</label>
           <input
             type="date"
-            name="publishedDate"
-            value={formData.publishedDate}
+            name="readOnDate"
+            value={formData.readOnDate}
             onChange={onInputChange}
             className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="Date you finished reading this book"
           />
         </div>
       </div>

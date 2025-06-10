@@ -1,72 +1,50 @@
-import { currentUser } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 import { getCollections } from "@/lib/collection-service"
+import { currentUser } from "@clerk/nextjs/server"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { CollectionCard } from "@/components/collections/CollectionCard"; // <<< ENSURE THIS LINE IS EXACTLY THIS (PascalCase)
 import Link from "next/link"
-import { Library, Plus } from "lucide-react"
+import { PlusCircle } from "lucide-react"
+import { Collection } from "@/types"
 
 export default async function CollectionsPage() {
   const user = await currentUser()
   
-  if (!user) {
+  if (!user || !user.id) {
     redirect("/sign-in")
   }
-  
-  const collections = await getCollections(user.id)
+
+  const collections: Collection[] = await getCollections(user.id)
   
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="container mx-auto p-4">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">My Collections</h1>
+          <h1 className="text-3xl font-bold">My Collections</h1>
           <p className="text-muted-foreground">Organize your books into custom collections</p>
         </div>
         
-        <Link href="/collections/create">
+        <Link href="/collections/new" passHref legacyBehavior>
           <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            New Collection
+            <PlusCircle className="mr-2 h-4 w-4" /> New Collection
           </Button>
         </Link>
       </div>
-      
-      {collections.length === 0 ? (
-        <Card>
-          <CardContent className="py-8">
-            <div className="text-center">
-              <Library className="mx-auto h-12 w-12 text-muted-foreground" />
-              <h3 className="mt-4 text-lg font-semibold">No collections yet</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Create collections to organize your books by genre, theme, or any way you like.
-              </p>
-              <Link href="/collections/create">
-                <Button className="mt-4">
-                  Create Your First Collection
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+
+      {collections && collections.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {collections.map((collection) => (
-            <Link href={`/collections/${collection.id}`} key={collection.id}>
-              <Card className="h-full hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
-                  <h3 className="font-semibold text-lg">{collection.name}</h3>
-                  {collection.description && (
-                    <p className="text-muted-foreground mt-1 text-sm line-clamp-2">
-                      {collection.description}
-                    </p>
-                  )}
-                  <p className="mt-2 text-sm">{collection.bookIds.length} books</p>
-                </CardContent>
-              </Card>
-            </Link>
+            <CollectionCard key={collection.id} collection={collection} />
           ))}
+        </div>
+      ) : (
+        <div className="text-center py-10">
+          <p className="text-lg text-muted-foreground">You haven't created any collections yet.</p>
+          <Link href="/collections/new" passHref legacyBehavior>
+             <Button className="mt-4">Create Your First Collection</Button>
+          </Link>
         </div>
       )}
     </div>
   )
-} 
+}

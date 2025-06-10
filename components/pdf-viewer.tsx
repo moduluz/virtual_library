@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useRouter } from 'next/navigation'; // Import useRouter
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -15,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Download } from "lucide-react"
+import { toast } from "@/components/ui/use-toast"
 
 interface PDFViewerProps {
   pdfUrl: string
@@ -23,6 +25,7 @@ interface PDFViewerProps {
 }
 
 export function PDFViewer({ pdfUrl, title, bookId }: PDFViewerProps) {
+  const router = useRouter(); // Initialize router
   const [isPdfDialogOpen, setIsPdfDialogOpen] = useState(false)
   const [isPromptOpen, setIsPromptOpen] = useState(false);
   const [pagesReadInput, setPagesReadInput] = useState("");
@@ -45,60 +48,93 @@ export function PDFViewer({ pdfUrl, title, bookId }: PDFViewerProps) {
     }
   }
 
-  const logReadingProgressAPI = async (pagesJustRead: number) => {
+  const logReadingProgressAPI = async (pagesJustRead: number): Promise<boolean> => {
     if (pagesJustRead <= 0) {
-      console.log("No new pages read to log.");
-      return;
+      toast({
+        variant: "destructive",
+        title: "Invalid Input",
+        description: "Please enter a number of pages greater than 0.",
+      })
+      return false;
     }
     try {
-      const currentDate = new Date().toISOString(); // Get current date in ISO format
-      console.log('Sending to API:', { bookId, pagesRead: pagesJustRead, dateRead: currentDate }); // Updated log
+      const localDate = new Date();
+      const year = localDate.getFullYear();
+      const month = String(localDate.getMonth() + 1).padStart(2, '0');
+      const day = String(localDate.getDate()).padStart(2, '0');
+      const currentDate = `${year}-${month}-${day}`;
+
       const response = await fetch('/api/log-daily-reading', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          bookId: bookId,            // This is correct
-          pagesRead: pagesJustRead,  // Changed from pagesReadCount to pagesRead
-          dateRead: currentDate,     // Added dateRead
+          bookId: bookId,
+          pagesRead: pagesJustRead,
+          dateRead: currentDate,
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Failed to log reading progress:', response.status, errorData);
-        alert(`Failed to log reading progress: ${errorData.error || 'Unknown error'}`);
+        toast({
+          variant: "destructive",
+          title: "API Error",
+          description: `Failed to log progress: ${errorData.error || 'Unknown error'}`,
+        });
+        return false;
       } else {
         const result = await response.json();
         console.log('Reading progress logged successfully:', result.message);
-        // Consider removing the alert or making it more user-friendly if it's too intrusive
-        alert('Reading progress logged!');
+        toast({
+          title: "Success!",
+          description: "Reading progress logged successfully.",
+        });
+        router.refresh(); // This will re-fetch data for Server Components and re-render
+        return true;
       }
     } catch (error) {
-      console.error('Error calling log-daily-reading API:', error);
-      alert('An error occurred while logging progress.');
+      console.error('Failed to log reading progress:', error);
+      toast({
+        variant: "destructive",
+        title: "Client Error",
+        description: "An error occurred while trying to log progress.",
+      });
+      return false;
     }
   };
 
 
   useEffect(() => {
     if (wasPdfDialogOpenRef.current && !isPdfDialogOpen) {
-      setPagesReadInput("");
+      // setPagesReadInput(""); // Clear input when dialog is triggered to open
       setIsPromptOpen(true);
     }
     wasPdfDialogOpenRef.current = isPdfDialogOpen;
   }, [isPdfDialogOpen]);
 
-  const handleSubmitPagesRead = () => {
+  const handleSubmitPagesRead = async () => {
     const pagesReadNum = parseInt(pagesReadInput, 10);
     if (!isNaN(pagesReadNum) && pagesReadNum > 0) {
-      logReadingProgressAPI(pagesReadNum);
-      setIsPromptOpen(false);
+      const success = await logReadingProgressAPI(pagesReadNum);
+      if (success) {
+        setIsPromptOpen(false);
+        setPagesReadInput(""); // Clear input on successful submission
+      }
     } else if (pagesReadNum <= 0) {
-      alert("Please enter a positive number of pages.");
+      toast({
+        variant: "destructive",
+        title: "Invalid Input",
+        description: "Please enter a positive number of pages.",
+      });
     } else {
-      alert("Invalid input. Please enter a number.");
+      toast({
+        variant: "destructive",
+        title: "Invalid Input",
+        description: "Invalid input. Please enter a number.",
+      });
     }
   };
 

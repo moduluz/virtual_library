@@ -4,12 +4,15 @@ import { useLocalStorage } from "@/hooks/use-local-storage"
 import { Card } from "@/components/ui/card"
 import Link from "next/link"
 import { BookOpen, BookText, BookMarked } from "lucide-react"
+import { Book as BookType } from '@/types'; // Or whatever Book type it uses
 
-type BookDisplayProps = {
-  books: Book[]
+export interface BookDisplayProps {
+  books: Book[]; // Ensure this Book type matches the one you're passing
+  displayType?: 'grid' | 'list'; // Add displayType as an optional prop
+  // Add other props if BookDisplay uses them
 }
 
-export function BookDisplay({ books }: BookDisplayProps) {
+export function BookDisplay({ books, displayType = 'grid' }: BookDisplayProps) {
   const [viewMode] = useLocalStorage<"grid" | "list">("book-view-mode", "grid")
   
   if (books.length === 0) {
@@ -32,7 +35,7 @@ export function BookDisplay({ books }: BookDisplayProps) {
     )
   }
   
-  if (viewMode === "grid") {
+  if (viewMode === "grid" || displayType === 'grid') {
     return <BookGrid books={books} />
   }
   
@@ -128,4 +131,4 @@ function BookList({ books }: BookDisplayProps) {
       ))}
     </div>
   )
-} 
+}

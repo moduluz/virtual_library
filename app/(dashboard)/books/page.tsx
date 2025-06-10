@@ -1,120 +1,114 @@
-import { currentUser } from "@clerk/nextjs/server"
-import { redirect } from "next/navigation"
-import { getAllBooks } from "@/lib/book-service"
-import { Card, CardContent } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import Link from "next/link"
-import { BookOpen, BookText, BookMarked } from "lucide-react"
+import { Book } from '@/types';
+import { supabase } from '@/lib/supabase';
+import { currentUser } from '@clerk/nextjs/server';
+import { redirect } from 'next/navigation';
+import Link from 'next/link';
 
-export default async function BooksPage() {
-  const user = await currentUser()
+async function getBooksDataForUser(userId: string): Promise<Book[]> {
+  console.log('[BooksPage - getBooksDataForUser] Fetching books for userId:', userId); // Log userId used in query
 
-  if (!user) {
-    redirect("/sign-in")
+  if (!userId) {
+    console.error('[BooksPage - getBooksDataForUser] No userId provided.');
+    return [];
+  }
+  if (!supabase) {
+    console.error('[BooksPage - getBooksDataForUser] Supabase client not available.');
+    return [];
   }
 
-  const books = await getAllBooks(user.id)
+  const { data, error, status } = await supabase
+    .from('books') // Ensure 'books' is your table name
+    .select('*') // Select all columns for now
+    .eq('userId', userId); // Ensure 'userId' is the column name in your 'books' table
 
-  const readingBooks = books.filter((book) => book.status === "reading")
-  const completedBooks = books.filter((book) => book.status === "completed")
-  const wantToReadBooks = books.filter((book) => book.status === "want-to-read")
+  if (error) {
+    console.error('[BooksPage - getBooksDataForUser] Supabase error fetching books:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+      status: status
+    });
+    return [];
+  }
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">My Books</h1>
-        <p className="text-muted-foreground">Manage your personal library</p>
-      </div>
-
-      <Tabs defaultValue="all" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="all">All Books ({books.length})</TabsTrigger>
-          <TabsTrigger value="reading">Reading ({readingBooks.length})</TabsTrigger>
-          <TabsTrigger value="completed">Completed ({completedBooks.length})</TabsTrigger>
-          <TabsTrigger value="want-to-read">Want to Read ({wantToReadBooks.length})</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="all" className="space-y-4">
-          <BookGrid books={books} />
-        </TabsContent>
-
-        <TabsContent value="reading" className="space-y-4">
-          <BookGrid books={readingBooks} />
-        </TabsContent>
-
-        <TabsContent value="completed" className="space-y-4">
-          <BookGrid books={completedBooks} />
-        </TabsContent>
-
-        <TabsContent value="want-to-read" className="space-y-4">
-          <BookGrid books={wantToReadBooks} />
-        </TabsContent>
-      </Tabs>
-    </div>
-  )
+  console.log('[BooksPage - getBooksDataForUser] Fetched data:', data); // Log the raw data from Supabase
+  return (data as Book[]) || [];
 }
 
-function BookGrid({ books }) {
-  if (books.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-8">
-          <div className="text-center">
-            <BookOpen className="mx-auto h-12 w-12 text-muted-foreground" />
-            <h3 className="mt-4 text-lg font-semibold">No books found</h3>
-            <p className="mt-2 text-sm text-muted-foreground">Add some books to see them here.</p>
-            <Link
-              href="/add-book"
-              className="mt-4 inline-flex items-center justify-center rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow transition-colors hover:bg-purple-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              Add Book
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-    )
+export default async function BooksPage() {
+  const user = await currentUser();
+
+  if (!user || !user.id) {
+    console.log('[BooksPage] User not authenticated, redirecting to sign-in.');
+    redirect('/sign-in');
   }
 
+  console.log('[BooksPage] Authenticated user ID from Clerk:', user.id); // Log Clerk user.id
+
+  const books: Book[] = await getBooksDataForUser(user.id);
+
+  console.log(`[BooksPage] Number of books fetched for user ${user.id}:`, books.length);
+
   return (
-    <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-      {books.map((book) => (
-        <Link href={`/books/${book.id}`} key={book.id}>
-          <Card className="overflow-hidden h-full hover:shadow-md transition-shadow">
-            <div className="aspect-[2/3] relative">
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10" />
-              <img
-                src={book.coverUrl || `/placeholder.svg?height=300&width=200&text=${encodeURIComponent(book.title)}`}
-                alt={book.title}
-                className="object-cover w-full h-full"
-              />
-              <div className="absolute bottom-2 left-2 right-2 z-20">
-                <p className="text-white font-medium line-clamp-2">{book.title}</p>
-                <p className="text-white/80 text-sm line-clamp-1">{book.author}</p>
-                <div className="flex items-center mt-1">
-                  {book.status === "reading" && (
-                    <span className="flex items-center text-xs bg-blue-500/80 text-white px-2 py-0.5 rounded-full">
-                      <BookOpen className="w-3 h-3 mr-1" />
-                      Reading
-                    </span>
-                  )}
-                  {book.status === "completed" && (
-                    <span className="flex items-center text-xs bg-green-500/80 text-white px-2 py-0.5 rounded-full">
-                      <BookText className="w-3 h-3 mr-1" />
-                      Completed
-                    </span>
-                  )}
-                  {book.status === "want-to-read" && (
-                    <span className="flex items-center text-xs bg-amber-500/80 text-white px-2 py-0.5 rounded-full">
-                      <BookMarked className="w-3 h-3 mr-1" />
-                      Want to Read
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </Card>
-        </Link>
-      ))}
+    <div className="container mx-auto p-4">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">My Books</h1>
+        <p className="text-muted-foreground">Manage your personal library</p>
+      </div>
+      
+      {/* You can add your tab navigation here if needed */}
+      {/* <div className="mb-6 border-b"> ... tabs ... </div> */}
+
+      {books && books.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+          {books.map((book) => (
+            <Link key={book.id} href={`/books/${book.id}`} passHref legacyBehavior>
+              <a className="block border rounded-lg p-4 shadow hover:shadow-lg transition-shadow">
+                {book.coverUrl && (
+                  <img 
+                    src={book.coverUrl} 
+                    alt={`Cover of ${book.title}`} 
+                    className="w-full h-64 object-contain mb-3 rounded" // Increased height
+                  />
+                )}
+                {!book.coverUrl && (
+                  <div className="w-full h-64 bg-gray-200 flex items-center justify-center mb-3 rounded">
+                    <span className="text-gray-500">No Cover</span>
+                  </div>
+                )}
+                <h2 className="text-lg font-semibold truncate" title={book.title}>
+                  {book.title}
+                </h2>
+                <p className="text-sm text-gray-600 truncate" title={book.author || undefined}>
+                  {book.author || 'Unknown Author'}
+                </p>
+                {/* <p className="text-xs text-gray-500">ID: {book.id}</p> */}
+                {/* <BookCard book={book} /> */}
+              </a>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-10 border-2 border-dashed rounded-lg">
+          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+          </svg>
+          <h3 className="mt-2 text-xl font-semibold text-gray-900">No books found</h3>
+          <p className="mt-1 text-sm text-gray-500">Add some books to see them here.</p>
+          <div className="mt-6">
+            {/* Link to your "Add Book" page or open a modal */}
+            {/* For example: <Link href="/add-book"><Button>Add Book</Button></Link> */}
+            <button
+              type="button"
+              className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              // onClick={() => router.push('/add-book')} // Or open modal
+            >
+              Add Book
+            </button>
+          </div>
+        </div>
+      )}
     </div>
-  )
+  );
 }

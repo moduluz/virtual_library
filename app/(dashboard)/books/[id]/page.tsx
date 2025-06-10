@@ -7,7 +7,6 @@ import { BookOpen, BookText, BookMarked, Star, Edit } from "lucide-react";
 import Link from "next/link";
 import BookDeleteButton from "./book-delete-button";
 import { PDFViewer } from "@/components/pdf-viewer";
-import { PDFActionButtons } from "@/components/books/PDFActionButtons";
 
 export default async function BookDetailPage({ params }: { params: Promise<{ id: string }> }) {
   console.log("BookDetailPage called with params:", params);
@@ -63,10 +62,9 @@ export default async function BookDetailPage({ params }: { params: Promise<{ id:
               </Link>
 
               {book.pdf_url && (
-                <PDFActionButtons 
-                  pdfUrl={book.pdf_url}  // ✅ Correct database column
-                  bookTitle={book.title} 
-                />
+                <div className="mt-4">
+                  <PDFViewer pdfUrl={book.pdf_url} title={book.title} bookId={book.id} />
+                </div>
               )}
 
               <BookDeleteButton bookId={book.id} bookTitle={book.title} />

@@ -24,12 +24,20 @@ interface BookFormData {
   coverUrl: string;
   description: string;
   genre: string;
-  pageCount: string; // Keep as string for form input, parse to number on submit
+  pageCount: string; 
   publishedDate: string;
   status: 'want-to-read' | 'reading' | 'completed';
-  rating: string; // Keep as string for form input, parse to number on submit
+  rating: string; 
   notes: string;
 }
+
+const PREDEFINED_GENRES = [
+  "Fiction", "Mystery", "Thriller", "Science Fiction", "Fantasy", "Romance", 
+  "Historical Fiction", "Horror", "Contemporary", "Dystopian", "Young Adult",
+  "Children's", "Non-Fiction", "Biography", "Autobiography", "History", 
+  "Science", "Self-Help", "Business", "Poetry", "Comics & Graphic Novels"
+].sort();
+
 
 export default function AddBookPage() {
   const { user } = useUser();
@@ -42,7 +50,7 @@ export default function AddBookPage() {
     isbn: '',
     coverUrl: '',
     description: '',
-    genre: '',
+    genre: '', // Initialize genre as empty or a default
     pageCount: '',
     publishedDate: '',
     status: 'want-to-read',
@@ -168,28 +176,31 @@ export default function AddBookPage() {
   };
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto p-4 max-w-3xl"> {/* Added max-w-3xl */}
       {/* Back Button */}
-      <Link href="/books" className="mb-4 inline-flex items-center text-blue-600 hover:underline">
+      <Link href="/books" className="mb-6 inline-flex items-center text-blue-600 hover:underline">
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back to Books
       </Link>
-      <h1 className="text-2xl font-bold mb-6">Add New Book</h1>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Title Field */}
-        <div>
-          <Label htmlFor="title">Title</Label>
-          <Input type="text" name="title" id="title" value={formData.title} onChange={handleInputChange} required className="mt-1" />
+      <h1 className="text-3xl font-bold mb-8 text-center">Add New Book</h1> {/* Centered and styled title */}
+      
+      <form onSubmit={handleSubmit} className="space-y-8"> {/* Increased space between sections */}
+        
+        {/* Section 1: Core Book Info */}
+        <div className="grid md:grid-cols-2 gap-6">
+          <div>
+            <Label htmlFor="title">Title</Label>
+            <Input type="text" name="title" id="title" value={formData.title} onChange={handleInputChange} required className="mt-1" />
+          </div>
+          <div>
+            <Label htmlFor="author">Author</Label>
+            <Input type="text" name="author" id="author" value={formData.author} onChange={handleInputChange} required className="mt-1" />
+          </div>
         </div>
 
-        {/* Author Field */}
-        <div>
-          <Label htmlFor="author">Author</Label>
-          <Input type="text" name="author" id="author" value={formData.author} onChange={handleInputChange} required className="mt-1" />
-        </div>
-        
-        {/* PDF Upload Field */}
-        <div className="space-y-2">
+        {/* Section 2: File and Visuals */}
+        <div className="grid md:grid-cols-2 gap-6 items-start">
+          <div className="space-y-2">
             <Label htmlFor="pdfFile">Book PDF (Optional)</Label>
             <div className="flex items-center space-x-2">
                 <Label htmlFor="pdfFile" className="flex items-center px-4 py-2 bg-white text-blue-500 rounded-md shadow-sm tracking-wide uppercase border border-blue-500 cursor-pointer hover:bg-blue-500 hover:text-white">
@@ -200,79 +211,82 @@ export default function AddBookPage() {
                 {selectedFile && (
                     <div className="flex items-center space-x-2 p-2 border rounded-md">
                         <FileText className="h-5 w-5 text-gray-500" />
-                        <span className="text-sm text-gray-700">{selectedFile.name}</span>
-                        <button type="button" onClick={() => setSelectedFile(null)} className="text-red-500 hover:text-red-700 text-xs">Clear</button>
+                        <span className="text-sm text-gray-700 truncate max-w-xs">{selectedFile.name}</span>
+                        <button type="button" onClick={() => setSelectedFile(null)} className="text-red-500 hover:text-red-700 text-xs ml-auto flex-shrink-0">Clear</button>
                     </div>
                 )}
             </div>
             {selectedFile && <p className="text-xs text-gray-500 mt-1">Selected: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)</p>}
-        </div>
-
-
-        {/* ISBN Field */}
-        <div>
-          <Label htmlFor="isbn">ISBN</Label>
-          <Input type="text" name="isbn" id="isbn" value={formData.isbn} onChange={handleInputChange} className="mt-1" />
-        </div>
-
-        {/* Cover URL Field */}
-        <div>
-          <Label htmlFor="coverUrl">Cover Image URL</Label>
-          <Input type="url" name="coverUrl" id="coverUrl" value={formData.coverUrl} onChange={handleInputChange} className="mt-1" />
+          </div>
+          <div>
+            <Label htmlFor="coverUrl">Cover Image URL</Label>
+            <Input type="url" name="coverUrl" id="coverUrl" value={formData.coverUrl} onChange={handleInputChange} className="mt-1" />
+          </div>
         </div>
         
-        {/* Description Field */}
+        {/* Section 3: Categorization & Details */}
+        <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <Label htmlFor="isbn">ISBN</Label>
+              <Input type="text" name="isbn" id="isbn" value={formData.isbn} onChange={handleInputChange} className="mt-1" />
+            </div>
+            <div>
+              <Label htmlFor="genre">Genre</Label>
+              <Select name="genre" value={formData.genre} onValueChange={(value) => handleSelectChange('genre', value)}>
+                <SelectTrigger className="w-full mt-1">
+                  <SelectValue placeholder="Select a genre" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PREDEFINED_GENRES.map((genreOption) => (
+                    <SelectItem key={genreOption} value={genreOption}>
+                      {genreOption}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+        </div>
+
+        {/* Section 4: Tracking Info */}
+        <div className="grid md:grid-cols-3 gap-6">
+          <div>
+            <Label htmlFor="pageCount">Page Count</Label>
+            <Input type="number" name="pageCount" id="pageCount" value={formData.pageCount} onChange={handleInputChange} className="mt-1" />
+          </div>
+          <div>
+            <Label htmlFor="publishedDate">Published Date</Label>
+            <Input type="date" name="publishedDate" id="publishedDate" value={formData.publishedDate} onChange={handleInputChange} className="mt-1" />
+          </div>
+          <div>
+            <Label htmlFor="status">Status</Label>
+            <Select name="status" value={formData.status} onValueChange={(value) => handleSelectChange('status', value)}>
+              <SelectTrigger className="w-full mt-1">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="want-to-read">Want to Read</SelectItem>
+                <SelectItem value="reading">Reading</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        
+        {/* Section 5: User Notes & Rating */}
+        <div>
+          <Label htmlFor="rating">Rating (1-5)</Label>
+          <Input type="number" name="rating" id="rating" value={formData.rating} onChange={handleInputChange} min="1" max="5" step="1" className="mt-1 md:w-1/3" /> {/* Made rating field shorter */}
+        </div>
         <div>
           <Label htmlFor="description">Description</Label>
           <Textarea name="description" id="description" value={formData.description} onChange={handleInputChange} rows={4} className="mt-1" />
         </div>
-
-        {/* Genre Field */}
-        <div>
-          <Label htmlFor="genre">Genre</Label>
-          <Input type="text" name="genre" id="genre" value={formData.genre} onChange={handleInputChange} className="mt-1" />
-        </div>
-
-        {/* Page Count Field */}
-        <div>
-          <Label htmlFor="pageCount">Page Count</Label>
-          <Input type="number" name="pageCount" id="pageCount" value={formData.pageCount} onChange={handleInputChange} className="mt-1" />
-        </div>
-
-        {/* Published Date Field */}
-        <div>
-          <Label htmlFor="publishedDate">Published Date</Label>
-          <Input type="date" name="publishedDate" id="publishedDate" value={formData.publishedDate} onChange={handleInputChange} className="mt-1" />
-        </div>
-
-        {/* Status Field */}
-        <div>
-          <Label htmlFor="status">Status</Label>
-          <Select name="status" value={formData.status} onValueChange={(value) => handleSelectChange('status', value)}>
-            <SelectTrigger className="w-full mt-1">
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="want-to-read">Want to Read</SelectItem>
-              <SelectItem value="reading">Reading</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Rating Field */}
-        <div>
-          <Label htmlFor="rating">Rating (1-5)</Label>
-          <Input type="number" name="rating" id="rating" value={formData.rating} onChange={handleInputChange} min="1" max="5" step="1" className="mt-1" />
-        </div>
-
-        {/* Notes Field */}
         <div>
           <Label htmlFor="notes">Notes</Label>
           <Textarea name="notes" id="notes" value={formData.notes} onChange={handleInputChange} rows={3} className="mt-1" />
         </div>
 
-        <Button type="submit" disabled={loading || !formData.title || !formData.author} className="w-full">
+        <Button type="submit" disabled={loading || !formData.title || !formData.author} className="w-full py-3 text-base font-semibold"> {/* Styled button */}
           {loading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -115,3 +115,19 @@ export async function removeBookFromCollection(
   const newBookIds = collection.bookIds.filter(id => id !== bookId)
   return updateCollection(userId, collectionId, { bookIds: newBookIds })
 }
+
+export async function getCollectionById(userId: string, collectionId: string) {
+  const { data: collection, error } = await supabase
+    .from('collections')
+    .select('*')
+    .eq('id', collectionId)
+    .eq('userId', userId)
+    .single()
+
+  if (error) {
+    console.error('Error fetching collection:', error)
+    return null
+  }
+
+  return collection
+}

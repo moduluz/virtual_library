@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
         const insertPayload = {
             user_id: userId, // Clerk user ID (text)
-            book_id: bookId, // Book's UUID (uuid)
+            book_id: bookId, 
             pages_read_on_date: pagesRead,
             read_date: dateRead,
         };

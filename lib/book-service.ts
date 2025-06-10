@@ -1,4 +1,5 @@
-import { supabase, type Book } from "./supabase"
+import { supabase } from './supabase';
+import { Book } from '@/types';
 
 // Get all books for a user
 export async function getAllBooks(userId: string): Promise<Book[]> {
@@ -140,4 +141,50 @@ export async function deleteBook(userId: string, bookId: string): Promise<void> 
     .from('reading_stats')
     .delete()
     .eq('userId', userId)
+}
+
+// Get books in a specific collection
+export async function getBooksInCollection(userId: string, bookIds: string[]) {
+  if (!bookIds || bookIds.length === 0) {
+    return []
+  }
+
+  const { data: books, error } = await supabase
+    .from('books')
+    .select('*')
+    .eq('userId', userId)
+    .in('id', bookIds)
+
+  if (error) {
+    console.error('Error fetching books in collection:', error)
+    return []
+  }
+
+  return books || []
+}
+
+export async function getAllBooksForUser(userId: string): Promise<Book[]> {
+  if (!supabase) {
+    console.error("Supabase client not initialized in getAllBooksForUser");
+    return [];
+  }
+  if (!userId) {
+    console.warn("getAllBooksForUser: userId is required.");
+    return [];
+  }
+  try {
+    const { data, error } = await supabase
+      .from('books')
+      .select('*')
+      .eq('userId', userId);
+
+    if (error) {
+      console.error('Error fetching all books for user:', error.message);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error('Unexpected error in getAllBooksForUser:', err);
+    return [];
+  }
 }
