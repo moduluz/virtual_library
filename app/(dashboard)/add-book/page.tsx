@@ -32,7 +32,7 @@ interface BookFormData {
 }
 
 const PREDEFINED_GENRES = [
-  "Fiction", "Mystery", "Thriller", "Science Fiction", "Fantasy", "Romance", 
+  "Fiction", "Mystery", "Thriller","Dark Fantasy", "Science Fiction", "Fantasy", "Romance", 
   "Historical Fiction", "Horror", "Contemporary", "Dystopian", "Young Adult",
   "Children's", "Non-Fiction", "Biography", "Autobiography", "History", 
   "Science", "Self-Help", "Business", "Poetry", "Comics & Graphic Novels"
