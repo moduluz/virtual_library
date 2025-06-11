@@ -24,7 +24,7 @@ export default async function CollectionsPage() {
           <p className="text-muted-foreground">Organize your books into custom collections</p>
         </div>
         
-        <Link href="/collections/new" passHref legacyBehavior>
+        <Link href="/collections/create" passHref>
           <Button>
             <PlusCircle className="mr-2 h-4 w-4" /> New Collection
           </Button>
