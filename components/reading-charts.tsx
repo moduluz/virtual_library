@@ -1,11 +1,26 @@
 "use client"
-import { 
-  BarChart, Bar, PieChart, Pie, LineChart, Line, 
+import {
+  BarChart, Bar, PieChart, Pie, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   Cell
 } from 'recharts'
 
-export function ReadingProgressChart({ data }) {
+interface ProgressDataPoint {
+  date: string
+  pagesRead: number
+}
+
+interface GenreDataPoint {
+  name: string
+  value: number
+}
+
+interface MonthlyDataPoint {
+  name: string
+  books: number
+}
+
+export function ReadingProgressChart({ data }: { data: ProgressDataPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height={300}>
       <LineChart data={data}>
@@ -20,9 +35,9 @@ export function ReadingProgressChart({ data }) {
   )
 }
 
-export function GenreDistributionChart({ data }) {
+export function GenreDistributionChart({ data }: { data: GenreDataPoint[] }) {
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82ca9d'];
-  
+
   return (
     <ResponsiveContainer width="100%" height={300}>
       <PieChart>
@@ -35,9 +50,9 @@ export function GenreDistributionChart({ data }) {
           fill="#8884d8"
           paddingAngle={5}
           dataKey="value"
-          label={({name, percent}) => `${name} (${(percent * 100).toFixed(0)}%)`}
+          label={({ name, percent }: { name: string; percent: number }) => `${name} (${(percent * 100).toFixed(0)}%)`}
         >
-          {data.map((entry, index) => (
+          {data.map((entry: GenreDataPoint, index: number) => (
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>
@@ -47,14 +62,14 @@ export function GenreDistributionChart({ data }) {
   )
 }
 
-export function ReadingGoalChart({ completed, goal }) {
+export function ReadingGoalChart({ completed, goal }: { completed: number; goal: number }) {
   const data = [
     { name: 'Completed', value: completed },
     { name: 'Remaining', value: Math.max(0, goal - completed) }
   ];
-  
+
   const COLORS = ['#8884d8', '#e0e0e0'];
-  
+
   return (
     <ResponsiveContainer width="100%" height={300}>
       <PieChart>
@@ -69,7 +84,7 @@ export function ReadingGoalChart({ completed, goal }) {
           fill="#8884d8"
           dataKey="value"
         >
-          {data.map((entry, index) => (
+          {data.map((entry, index: number) => (
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>
@@ -88,7 +103,7 @@ export function ReadingGoalChart({ completed, goal }) {
   )
 }
 
-export function MonthlyBooksChart({ data }) {
+export function MonthlyBooksChart({ data }: { data: MonthlyDataPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={data}>
@@ -101,4 +116,4 @@ export function MonthlyBooksChart({ data }) {
       </BarChart>
     </ResponsiveContainer>
   )
-} 
+}

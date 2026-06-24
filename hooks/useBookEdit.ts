@@ -1,31 +1,29 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser, useAuth } from '@clerk/nextjs';
-import { supabase, createClerkSupabaseClient } from '@/lib/supabase'; 
+import { useSession } from 'next-auth/react';
 
 interface Book {
   id: string
   userId: string
   title: string
   author: string
-  isbn?: string
-  coverUrl?: string
-  description?: string
-  genre?: string
-  pageCount?: number
-  publishedDate?: string
+  isbn?: string | null
+  coverUrl?: string | null
+  description?: string | null
+  genre?: string | null
+  pageCount?: number | null
+  publishedDate?: string | null
   status: 'want-to-read' | 'reading' | 'completed'
-  rating?: number
-  notes?: string
+  rating?: number | null
+  notes?: string | null
   dateAdded: string
-  pdf_url?: string
+  pdfUrl?: string | null
 }
 
 export function useBookEdit(bookId: string) {
   const router = useRouter();
-  const { user } = useUser();
-  const { getToken } = useAuth(); // Ensure getToken is destructured here
-  
+  const { data: session } = useSession();
+
   const [book, setBook] = useState<Book | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -40,7 +38,7 @@ export function useBookEdit(bookId: string) {
     genre: '',
     pageCount: '',
     publishedDate: '',
-    status: 'want-to-read' as const,
+    status: 'want-to-read' as 'want-to-read' | 'reading' | 'completed',
     rating: '',
     notes: ''
   })
@@ -48,15 +46,12 @@ export function useBookEdit(bookId: string) {
   const fetchBook = async () => {
     try {
       setLoading(true)
-      const { data, error } = await supabase
-        .from('books')
-        .select('*')
-        .eq('id', bookId)
-        .eq('userId', user?.id)
-        .single()
+      const response = await fetch(`/api/books/${bookId}`)
+      if (!response.ok) {
+        throw new Error('Book not found')
+      }
+      const data: Book = await response.json()
 
-      if (error) throw error
-      
       setBook(data)
       setFormData({
         title: data.title || '',
@@ -67,87 +62,53 @@ export function useBookEdit(bookId: string) {
         genre: data.genre || '',
         pageCount: data.pageCount?.toString() || '',
         publishedDate: data.publishedDate || '',
-        status: data.status || 'want-to-read',
+        status: (data.status as 'want-to-read' | 'reading' | 'completed') || 'want-to-read',
         rating: data.rating?.toString() || '',
         notes: data.notes || ''
       })
     } catch (error) {
       console.error('Error fetching book:', error)
-      alert('Failed to load book')
       router.push('/books')
     } finally {
       setLoading(false)
     }
   }
 
-  const uploadPdf = async (file: File): Promise<string | undefined> => {
-    console.log('[useBookEdit] uploadPdf: Function called.'); // Log 1
-
-    if (!user) {
-      console.error('[useBookEdit] uploadPdf: User object is missing!');
-      return undefined;
-    }
-    if (!book) {
-      console.error('[useBookEdit] uploadPdf: Book object is missing!');
-      return undefined;
-    }
-    if (!getToken) {
-      console.error('[useBookEdit] uploadPdf: getToken function from useAuth is missing!');
-      return undefined;
-    }
-
-    console.log('[useBookEdit] uploadPdf: User, book, and getToken are present.'); // Log 2
-
-    try {
-      console.log('[useBookEdit] uploadPdf: Attempting to create Supabase client with Clerk token...'); // Log 3
-      const supabaseClient = createClerkSupabaseClient(getToken);
-      console.log('[useBookEdit] uploadPdf: supabaseClient with Clerk token created (or function called).'); // Log 4
-
-      const fileName = `${user.id}-${book.id}.pdf`;
-      console.log(`[useBookEdit] uploadPdf: Uploading ${fileName} to books-pdf...`); // Log 5
-      
-      const { data, error } = await supabaseClient.storage
-        .from('books-pdf')
-        .upload(fileName, file, {
-          upsert: true,
-          contentType: 'application/pdf'
-        });
-
-      if (error) {
-        console.error('[useBookEdit] uploadPdf: Supabase storage upload error:', error); // Log 6 (error)
-        throw error;
-      }
-
-      console.log('[useBookEdit] uploadPdf: Upload successful. Getting public URL...'); // Log 7
-      const { data: urlData } = supabaseClient.storage
-        .from('books-pdf')
-        .getPublicUrl(fileName);
-
-      console.log('[useBookEdit] uploadPdf: Public URL obtained:', urlData.publicUrl); // Log 8
-      return urlData.publicUrl;
-    } catch (error) {
-      console.error('[useBookEdit] Error in uploadPdf function:', error); // Log 9 (catch block)
-      throw error;
-    }
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !book) return
+    if (!session?.user || !book) return
 
     setSaving(true)
     try {
-      let pdfUrl = book.pdf_url
+      // If there's a new PDF, upload it first
+      let pdfUrl = book.pdfUrl
 
-      // Upload new PDF if selected using API route
       if (selectedPdfFile) {
-        const newPdfUrl = await uploadPdf(selectedPdfFile)
-        if (newPdfUrl) {
-          pdfUrl = newPdfUrl
+        const formDataToSend = new FormData()
+        formDataToSend.append('file', selectedPdfFile)
+        // Re-use the upload-pdf route but just for PDF upload part
+        // We'll pass existing book data so a new record isn't created
+        formDataToSend.append('bookData', JSON.stringify({
+          title: formData.title.trim(),
+          author: formData.author.trim(),
+          // flag to indicate this is an update, not a new book
+          _existingBookId: bookId,
+        }))
+        
+        // Use the direct PDF upload API
+        const uploadRes = await fetch(`/api/books/${bookId}/upload-pdf`, {
+          method: 'POST',
+          body: formDataToSend,
+        })
+
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json()
+          pdfUrl = uploadData.pdfUrl
         }
+        // If upload fails, we still proceed with other updates
       }
 
-      const updateData = {
+      const updateData: any = {
         title: formData.title.trim(),
         author: formData.author.trim(),
         isbn: formData.isbn.trim() || null,
@@ -159,19 +120,25 @@ export function useBookEdit(bookId: string) {
         status: formData.status,
         rating: formData.rating ? parseInt(formData.rating) : null,
         notes: formData.notes.trim() || null,
-        pdf_url: pdfUrl || undefined
       }
 
-      const { error } = await supabase
-        .from('books')
-        .update(updateData)
-        .eq('id', bookId)
-        .eq('userId', user.id)
+      if (pdfUrl !== book.pdfUrl) {
+        updateData.pdfUrl = pdfUrl
+      }
 
-      if (error) throw error
+      const response = await fetch(`/api/books/${bookId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      })
 
-      alert(selectedPdfFile ? 'Book and PDF updated successfully!' : 'Book updated successfully!')
-      router.push('/books')
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.error || 'Failed to update book')
+      }
+
+      router.push(`/books/${bookId}`)
+      router.refresh()
     } catch (error: any) {
       console.error('Error updating book:', error)
       alert(error.message || 'Failed to update book')
@@ -185,27 +152,20 @@ export function useBookEdit(bookId: string) {
   }
 
   const handleDelete = async () => {
-    if (!user || !book || !deleteConfirm) return
+    if (!session?.user || !book || !deleteConfirm) return
 
     try {
-      // Delete PDF if exists
-      if (book.pdf_url) {
-        const fileName = `${user.id}-${book.id}.pdf`
-        await supabase.storage
-          .from('books-pdf')
-          .remove([fileName])
+      const response = await fetch(`/api/books/${bookId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.error || 'Failed to delete book')
       }
 
-      const { error } = await supabase
-        .from('books')
-        .delete()
-        .eq('id', bookId)
-        .eq('userId', user.id)
-
-      if (error) throw error
-
-      alert('Book deleted successfully!')
       router.push('/books')
+      router.refresh()
     } catch (error: any) {
       console.error('Error deleting book:', error)
       alert(error.message || 'Failed to delete book')
@@ -218,10 +178,10 @@ export function useBookEdit(bookId: string) {
   }
 
   useEffect(() => {
-    if (user) {
+    if (session?.user) {
       fetchBook()
     }
-  }, [bookId, user])
+  }, [bookId, session])
 
   return {
     book,

@@ -3,12 +3,21 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { UserButton } from "@clerk/nextjs"
-import { BookOpen, BookPlus, Home, Library, Search, User, BarChart } from "lucide-react"
-import { ThemeToggleButton } from "@/components/theme-toggle-button"; // Import the ThemeToggleButton
+import { useSession, signOut } from "next-auth/react"
+import { BookOpen, BookPlus, Home, Library, Search, BarChart, LogOut, User } from "lucide-react"
+import { ThemeToggleButton } from "@/components/theme-toggle-button"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 export function MainNav() {
   const pathname = usePathname()
+  const { data: session } = useSession()
 
   const routes = [
     {
@@ -47,18 +56,9 @@ export function MainNav() {
       icon: Search,
       active: pathname === "/search",
     },
-    // The /profile route is usually handled by Clerk's UserButton,
-    // so you might not need it explicitly here if UserButton links to the profile page.
-    // {
-    //   href: "/profile",
-    //   label: "Profile",
-    //   icon: User,
-    //   active: pathname === "/profile",
-    // },
   ]
 
   return (
-    // Added a wrapper div for better layout control of brand, nav links, and user actions
     <div className="flex items-center justify-between border-b h-16 px-4 md:px-6">
       <div className="flex items-center">
         <Link href="/dashboard" className="mr-6 flex items-center space-x-2">
@@ -72,26 +72,68 @@ export function MainNav() {
                 key={route.href}
                 href={route.href}
                 className={cn(
-                  "flex items-center text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md", // Added some padding
+                  "flex items-center text-sm font-medium transition-colors hover:text-primary px-2 py-1 rounded-md",
                   route.active
-                    ? "text-primary bg-muted" // More distinct active state
-                    : "text-muted-foreground hover:text-foreground/80", // Adjusted hover for non-active
+                    ? "text-primary bg-muted"
+                    : "text-muted-foreground hover:text-foreground/80",
                 )}
               >
                 <Icon className="mr-2 h-4 w-4" />
-                <span className="hidden lg:inline">{route.label}</span> {/* Show labels on larger screens */}
-                <span className="lg:hidden md:inline sr-only">{route.label}</span> {/* Accessibility for icon-only */}
+                <span className="hidden lg:inline">{route.label}</span>
+                <span className="lg:hidden md:inline sr-only">{route.label}</span>
               </Link>
             )
           })}
         </nav>
       </div>
 
-      <div className="flex items-center space-x-3"> {/* Container for theme toggle and user button */}
-        <ThemeToggleButton /> {/* Add the ThemeToggleButton here */}
-        <UserButton afterSignOutUrl="/" />
+      <div className="flex items-center space-x-3">
+        <ThemeToggleButton />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="relative h-8 w-8 rounded-full">
+              {session?.user?.image ? (
+                <img
+                  src={session.user.image}
+                  alt={session.user.name || "User"}
+                  className="h-8 w-8 rounded-full object-cover"
+                />
+              ) : (
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-600 text-white text-sm font-medium">
+                  {session?.user?.name?.charAt(0)?.toUpperCase() || session?.user?.email?.charAt(0)?.toUpperCase() || "U"}
+                </div>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <div className="flex items-center justify-start gap-2 p-2">
+              <div className="flex flex-col space-y-1 leading-none">
+                {session?.user?.name && (
+                  <p className="font-medium">{session.user.name}</p>
+                )}
+                {session?.user?.email && (
+                  <p className="text-xs text-muted-foreground">{session.user.email}</p>
+                )}
+              </div>
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/profile" className="cursor-pointer">
+                <User className="mr-2 h-4 w-4" />
+                Profile
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer text-red-600 focus:text-red-600"
+              onClick={() => signOut({ callbackUrl: "/" })}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-      {/* Consider adding a mobile menu button here that shows/hides the nav items */}
     </div>
   )
 }

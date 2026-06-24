@@ -1,21 +1,25 @@
-import { NextResponse } from "next/server"
-import { currentUser } from "@clerk/nextjs/server"
-import { addCollection } from "@/lib/collection-service"
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { addCollection } from "@/lib/collection-service";
 
 export async function POST(request: Request) {
   try {
-    const user = await currentUser()
+    const session = await auth();
+    const userId = session?.user?.id;
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const data = await request.json()
-    const collection = await addCollection(user.id, data)
+    const data = await request.json();
+    const collection = await addCollection(userId, data);
 
-    return NextResponse.json(collection)
+    return NextResponse.json(collection);
   } catch (error) {
-    console.error("Error adding collection:", error)
-    return NextResponse.json({ error: "Failed to add collection" }, { status: 500 })
+    console.error("Error adding collection:", error);
+    return NextResponse.json(
+      { error: "Failed to add collection" },
+      { status: 500 }
+    );
   }
-} 
+}

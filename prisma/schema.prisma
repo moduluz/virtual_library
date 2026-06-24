@@ -1,0 +1,138 @@
+// Prisma schema for Virtual Library
+// Replaces Supabase + Clerk with self-hosted PostgreSQL + NextAuth.js
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── NextAuth.js Models ───────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String? // For credentials-based auth (bcrypt hashed)
+
+  accounts Account[]
+  sessions Session[]
+
+  books            Book[]
+  collections      Collection[]
+  readingStats     ReadingStats?
+  dailyReadingLogs DailyReadingLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Application Models ───────────────────────────────────────────
+
+model Book {
+  id            String   @id @default(uuid())
+  userId        String
+  title         String
+  author        String
+  isbn          String?
+  coverUrl      String?
+  description   String?  @db.Text
+  genre         String?
+  pageCount     Int?
+  publishedDate String?
+  status        String   @default("want-to-read") // "want-to-read", "reading", "completed"
+  rating        Int? // 0-5
+  notes         String?  @db.Text
+  dateAdded     DateTime @default(now())
+  pdfUrl        String?  @map("pdf_url")
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  collections Collection[] @relation("BookToCollection")
+
+  dailyReadingLogs DailyReadingLog[]
+
+  @@index([userId])
+}
+
+model Collection {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  description String?  @db.Text
+  color       String? // Hex color code
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  books Book[] @relation("BookToCollection")
+
+  @@index([userId])
+}
+
+model ReadingStats {
+  id              String @id @default(cuid())
+  userId          String @unique
+  booksRead       Int    @default(0)
+  pagesRead       Int    @default(0)
+  booksInProgress Int    @default(0)
+  booksWantToRead Int    @default(0)
+  readingGoal     Int    @default(12)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DailyReadingLog {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  bookId          String   @map("book_id")
+  pagesReadOnDate Int      @map("pages_read_on_date")
+  readDate        DateTime @map("read_date") @db.Date
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([bookId])
+  @@map("daily_reading_logs")
+}

@@ -1,21 +1,20 @@
 import { redirect } from "next/navigation"
 import { getCollections } from "@/lib/collection-service"
-import { currentUser } from "@clerk/nextjs/server"
+import { auth } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
-import { CollectionCard } from "@/components/collections/CollectionCard"; // <<< ENSURE THIS LINE IS EXACTLY THIS (PascalCase)
+import { CollectionCard } from "@/components/collections/CollectionCard";
 import Link from "next/link"
 import { PlusCircle } from "lucide-react"
-import { Collection } from "@/types"
 
 export default async function CollectionsPage() {
-  const user = await currentUser()
-  
-  if (!user || !user.id) {
-    redirect("/sign-in")
+  const session = await auth()
+
+  if (!session?.user?.id) {
+    redirect("/auth/signin")
   }
 
-  const collections: Collection[] = await getCollections(user.id)
-  
+  const collections = await getCollections(session.user.id)
+
   return (
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
@@ -23,7 +22,7 @@ export default async function CollectionsPage() {
           <h1 className="text-3xl font-bold">My Collections</h1>
           <p className="text-muted-foreground">Organize your books into custom collections</p>
         </div>
-        
+
         <Link href="/collections/create" passHref>
           <Button>
             <PlusCircle className="mr-2 h-4 w-4" /> New Collection
@@ -39,7 +38,7 @@ export default async function CollectionsPage() {
         </div>
       ) : (
         <div className="text-center py-10">
-          <p className="text-lg text-muted-foreground">You haven't created any collections yet.</p>
+          <p className="text-lg text-muted-foreground">You haven&apos;t created any collections yet.</p>
           <Link href="/collections/new" passHref legacyBehavior>
              <Button className="mt-4">Create Your First Collection</Button>
           </Link>

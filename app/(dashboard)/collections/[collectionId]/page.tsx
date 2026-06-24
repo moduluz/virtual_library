@@ -1,36 +1,33 @@
 import { getBooksInCollection, getAllBooksForUser } from "@/lib/book-service";
 import { getCollectionById } from "@/lib/collection-service";
 import CollectionDetailClient from "@/components/collections/CollectionDetailClient";
-import { currentUser } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
-import { Collection, Book } from "@/types";
 
 interface CollectionDetailPageProps {
-  params: { collectionId: string }; // Or Promise<{ collectionId: string }> if Next.js version implies
+  params: { collectionId: string };
 }
 
 export default async function CollectionDetailPage({ params }: CollectionDetailPageProps) {
-  // Await the params object itself before destructuring
   const resolvedParams = await params;
   const { collectionId } = resolvedParams;
 
-  const user = await currentUser();
+  const session = await auth();
 
-  if (!user || !user.id) {
-    redirect("/sign-in");
+  if (!session?.user?.id) {
+    redirect("/auth/signin");
     return null;
   }
 
-  // Ensure getCollectionById and other service functions are correctly implemented
-  const collection: Collection | null = await getCollectionById(user.id, collectionId);
+  const collection = await getCollectionById(session.user.id, collectionId);
 
   if (!collection) {
     notFound();
     return null;
   }
 
-  const booksInCollection: Book[] = await getBooksInCollection(user.id, collection.bookIds || []);
-  const allUserBooks: Book[] = await getAllBooksForUser(user.id);
+  const booksInCollection = await getBooksInCollection(session.user.id, collection.bookIds || []);
+  const allUserBooks = await getAllBooksForUser(session.user.id);
 
   return (
     <CollectionDetailClient

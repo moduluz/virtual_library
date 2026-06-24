@@ -1,20 +1,29 @@
 "use client"
-import { Book } from "@/lib/supabase"
 import { useLocalStorage } from "@/hooks/use-local-storage"
 import { Card } from "@/components/ui/card"
 import Link from "next/link"
 import { BookOpen, BookText, BookMarked } from "lucide-react"
-import { Book as BookType } from '@/types'; // Or whatever Book type it uses
 
-export interface BookDisplayProps {
-  books: Book[]; // Ensure this Book type matches the one you're passing
-  displayType?: 'grid' | 'list'; // Add displayType as an optional prop
-  // Add other props if BookDisplay uses them
+interface Book {
+  id: string;
+  title: string;
+  author: string;
+  status: string;
+  coverUrl?: string | null;
+  genre?: string | null;
+  rating?: number | null;
+  dateAdded: string;
+  [key: string]: any;
 }
 
-export function BookDisplay({ books, displayType = 'grid' }: BookDisplayProps) {
+export interface BookDisplayProps {
+  books: Book[];
+  displayType?: "grid" | "list";
+}
+
+export function BookDisplay({ books, displayType = "grid" }: BookDisplayProps) {
   const [viewMode] = useLocalStorage<"grid" | "list">("book-view-mode", "grid")
-  
+
   if (books.length === 0) {
     return (
       <Card>
@@ -34,11 +43,11 @@ export function BookDisplay({ books, displayType = 'grid' }: BookDisplayProps) {
       </Card>
     )
   }
-  
-  if (viewMode === "grid" || displayType === 'grid') {
+
+  if (viewMode === "grid" || displayType === "grid") {
     return <BookGrid books={books} />
   }
-  
+
   return <BookList books={books} />
 }
 
@@ -61,20 +70,17 @@ function BookGrid({ books }: BookDisplayProps) {
                 <div className="flex items-center mt-1">
                   {book.status === "reading" && (
                     <span className="flex items-center text-xs bg-blue-500/80 text-white px-2 py-0.5 rounded-full">
-                      <BookOpen className="w-3 h-3 mr-1" />
-                      Reading
+                      <BookOpen className="w-3 h-3 mr-1" /> Reading
                     </span>
                   )}
                   {book.status === "completed" && (
                     <span className="flex items-center text-xs bg-green-500/80 text-white px-2 py-0.5 rounded-full">
-                      <BookText className="w-3 h-3 mr-1" />
-                      Completed
+                      <BookText className="w-3 h-3 mr-1" /> Completed
                     </span>
                   )}
                   {book.status === "want-to-read" && (
                     <span className="flex items-center text-xs bg-amber-500/80 text-white px-2 py-0.5 rounded-full">
-                      <BookMarked className="w-3 h-3 mr-1" />
-                      Want to Read
+                      <BookMarked className="w-3 h-3 mr-1" /> Want to Read
                     </span>
                   )}
                 </div>
@@ -107,20 +113,17 @@ function BookList({ books }: BookDisplayProps) {
                 <div className="flex items-center mt-1">
                   {book.status === "reading" && (
                     <span className="flex items-center text-xs bg-blue-500/80 text-white px-2 py-0.5 rounded-full">
-                      <BookOpen className="w-3 h-3 mr-1" />
-                      Reading
+                      <BookOpen className="w-3 h-3 mr-1" /> Reading
                     </span>
                   )}
                   {book.status === "completed" && (
                     <span className="flex items-center text-xs bg-green-500/80 text-white px-2 py-0.5 rounded-full">
-                      <BookText className="w-3 h-3 mr-1" />
-                      Completed
+                      <BookText className="w-3 h-3 mr-1" /> Completed
                     </span>
                   )}
                   {book.status === "want-to-read" && (
                     <span className="flex items-center text-xs bg-amber-500/80 text-white px-2 py-0.5 rounded-full">
-                      <BookMarked className="w-3 h-3 mr-1" />
-                      Want to Read
+                      <BookMarked className="w-3 h-3 mr-1" /> Want to Read
                     </span>
                   )}
                 </div>

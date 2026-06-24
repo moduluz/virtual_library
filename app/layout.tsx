@@ -1,10 +1,10 @@
 import type React from "react"
-import { ClerkProvider } from "@clerk/nextjs"
+import { SessionProvider } from "next-auth/react"
 import { ThemeProvider } from "@/components/theme-provider"
 import "./globals.css"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
-import { Toaster } from "@/components/ui/toaster" // Import Toaster
+import { Toaster } from "@/components/ui/toaster"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -21,30 +21,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <ClerkProvider
-        appearance={{
-          baseTheme: undefined,
-          elements: {
-            formButtonPrimary: "bg-purple-600 hover:bg-purple-700",
-            footerActionLink: "text-purple-600 hover:text-purple-700",
-            card: "bg-white shadow-none",
-            headerTitle: "hidden",
-            headerSubtitle: "hidden",
-          },
-          layout: {
-            socialButtonsPlacement: "bottom",
-            socialButtonsVariant: "blockButton",
-            shimmer: false,
-          },
-        }}
-      >
-        <body className={inter.className}>
+      <body className={inter.className}>
+        <SessionProvider>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
             {children}
-            <Toaster /> {/* Add Toaster here */}
+            <Toaster />
           </ThemeProvider>
-        </body>
-      </ClerkProvider>
+        </SessionProvider>
+      </body>
     </html>
   )
 }

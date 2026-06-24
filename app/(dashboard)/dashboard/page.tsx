@@ -1,95 +1,42 @@
-import { currentUser } from "@clerk/nextjs/server"
+import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
-import { supabase, type Book, type ReadingStats } from "@/lib/supabase"
+import { prisma } from "@/lib/prisma"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { BookOpen, BookText, BookMarked } from "lucide-react"
 import Link from "next/link"
 
-async function getReadingStats(userId: string): Promise<ReadingStats> {
-  // Try to get stats from Supabase
-  const { data: stats, error: statsError } = await supabase
-    .from('reading_stats')
-    .select('*')
-    .eq('userId', userId)
-    .single()
-
-  if (stats && !statsError) return stats
-
-  // If no stats exist, calculate them
-  const { data, error: booksError } = await supabase
-    .from('books')
-    .select('*')
-    .eq('userId', userId)
-
-  const books = data ?? [];
-
-  if (booksError) {
-    console.error('Error fetching books:', booksError)
-    return {
-      userId,
-      booksRead: 0,
-      pagesRead: 0,
-      booksInProgress: 0,
-      booksWantToRead: 0,
-      readingGoal: 0
-    }
-  }
-
-  const newStats: ReadingStats = {
-    userId,
-    booksRead: books.filter((book) => book.status === "completed").length,
-    pagesRead: books
-      .filter((book) => book.status === "completed")
-      .reduce((sum, book) => sum + (book.pageCount || 0), 0),
-    booksInProgress: books.filter((book) => book.status === "reading").length,
-    booksWantToRead: books.filter((book) => book.status === "want-to-read").length,
-    readingGoal: 0
-  }
-
-  // Save stats to Supabase
-  const { error } = await supabase
-    .from('reading_stats')
-    .upsert(newStats)
-    .select()
-
-  if (error) {
-    console.error('Error saving reading stats:', error)
-  }
-
-  return newStats
-}
-
-async function getRecentBooks(userId: string): Promise<Book[]> {
-  const { data, error } = await supabase
-    .from('books')
-    .select('*')
-    .eq('userId', userId)
-    .order('dateAdded', { ascending: false })
-    .limit(5)
-
-  if (error) {
-    console.error('Error fetching recent books:', error)
-    return []
-  }
-
-  return data ?? []
-}
-
 export default async function DashboardPage() {
-  const user = await currentUser()
+  const session = await auth()
 
-  if (!user) {
-    redirect("/sign-in")
+  if (!session?.user) {
+    redirect("/auth/signin")
   }
 
-  const stats = await getReadingStats(user.id)
-  const recentBooks = await getRecentBooks(user.id)
+  const userId = session.user.id!
+
+  // Get stats
+  const [booksRead, pagesRead, booksInProgress, booksWantToRead] = await Promise.all([
+    prisma.book.count({ where: { userId, status: "completed" } }),
+    prisma.book.findMany({
+      where: { userId, status: "completed" },
+      select: { pageCount: true },
+    }).then(books => books.reduce((sum, b) => sum + (b.pageCount || 0), 0)),
+    prisma.book.count({ where: { userId, status: "reading" } }),
+    prisma.book.count({ where: { userId, status: "want-to-read" } }),
+  ])
+
+  // Get recent books
+  const recentBooks = await prisma.book.findMany({
+    where: { userId },
+    orderBy: { dateAdded: "desc" },
+    take: 5,
+  })
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Welcome back, {user.firstName || "Reader"}!</h1>
-        <p className="text-muted-foreground">Here's an overview of your reading activity</p>
+        <h1 className="text-3xl font-bold tracking-tight">Welcome back, {session.user.name || "Reader"}!</h1>
+        <p className="text-muted-foreground">Here&apos;s an overview of your reading activity</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -99,7 +46,7 @@ export default async function DashboardPage() {
             <BookText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.booksRead}</div>
+            <div className="text-2xl font-bold">{booksRead}</div>
           </CardContent>
         </Card>
 
@@ -109,7 +56,7 @@ export default async function DashboardPage() {
             <BookOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.pagesRead}</div>
+            <div className="text-2xl font-bold">{pagesRead}</div>
           </CardContent>
         </Card>
 
@@ -119,7 +66,7 @@ export default async function DashboardPage() {
             <BookOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.booksInProgress}</div>
+            <div className="text-2xl font-bold">{booksInProgress}</div>
           </CardContent>
         </Card>
 
@@ -129,7 +76,7 @@ export default async function DashboardPage() {
             <BookMarked className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.booksWantToRead}</div>
+            <div className="text-2xl font-bold">{booksWantToRead}</div>
           </CardContent>
         </Card>
       </div>

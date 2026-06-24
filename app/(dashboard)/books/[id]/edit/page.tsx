@@ -100,7 +100,7 @@ export default function EditBookPage({ params }: { params: Promise<{ id: string 
           formData={formData}
           loading={loading}
           saving={saving}
-          currentPdfUrl={book.pdf_url}
+          currentPdfUrl={book.pdfUrl ?? undefined}
           onInputChange={handleInputChange}
           onSubmit={handleSubmit}
           onCancel={() => router.push('/books')}

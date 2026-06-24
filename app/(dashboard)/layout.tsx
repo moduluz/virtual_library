@@ -1,7 +1,7 @@
 import type React from "react"
 import { MainNav } from "@/components/main-nav"
 import { redirect } from "next/navigation"
-import { currentUser } from "@clerk/nextjs/server"
+import { auth } from "@/lib/auth"
 import Link from "next/link"
 import { BookOpen } from "lucide-react"
 
@@ -10,10 +10,10 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const user = await currentUser()
+  const session = await auth()
 
-  if (!user) {
-    redirect("/sign-in")
+  if (!session?.user) {
+    redirect("/auth/signin")
   }
 
   return (

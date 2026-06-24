@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
 import {
   Accordion,
   AccordionContent,
@@ -13,7 +12,23 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { BookOpenCheck, Filter } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 import { BookDisplay } from "@/components/book-display"
-import { Book } from "@/lib/supabase"
+
+interface Book {
+  id: string;
+  title: string;
+  author: string;
+  status: string;
+  genre?: string | null;
+  coverUrl?: string | null;
+  rating?: number | null;
+  dateAdded: string;
+  description?: string | null;
+  isbn?: string | null;
+  pageCount?: number | null;
+  publishedDate?: string | null;
+  notes?: string | null;
+  pdfUrl?: string | null;
+}
 
 export default function SearchPage() {
   const [query, setQuery] = useState("")
@@ -25,26 +40,23 @@ export default function SearchPage() {
   const [searchResults, setSearchResults] = useState<Book[]>([])
   const [loading, setLoading] = useState(false)
   const debouncedQuery = useDebounce(query, 500)
-  
-  // Perform search when query or filters change
+
   useEffect(() => {
     async function performSearch() {
       if (!debouncedQuery && Object.values(filters).every(f => !f || (Array.isArray(f) && f.length === 0))) {
         setSearchResults([])
         return
       }
-      
+
       setLoading(true)
-      
+
       try {
         const response = await fetch(`/api/books/search?q=${encodeURIComponent(debouncedQuery)}`, {
-          method: 'POST',
+          method: "POST",
           body: JSON.stringify({ filters }),
-          headers: {
-            'Content-Type': 'application/json'
-          }
+          headers: { "Content-Type": "application/json" }
         })
-        
+
         if (response.ok) {
           const data = await response.json()
           setSearchResults(data)
@@ -55,7 +67,7 @@ export default function SearchPage() {
         setLoading(false)
       }
     }
-    
+
     performSearch()
   }, [debouncedQuery, filters])
 
@@ -65,7 +77,7 @@ export default function SearchPage() {
         <h1 className="text-3xl font-bold tracking-tight">Search Books</h1>
         <p className="text-muted-foreground">Find books in your library</p>
       </div>
-      
+
       <div className="grid gap-6 md:grid-cols-[250px_1fr]">
         <div className="space-y-6">
           <Accordion type="single" collapsible defaultValue="filters">
@@ -89,7 +101,7 @@ export default function SearchPage() {
                             onCheckedChange={(checked) => {
                               setFilters(prev => ({
                                 ...prev,
-                                status: checked 
+                                status: checked
                                   ? [...prev.status, status]
                                   : prev.status.filter(s => s !== status)
                               }))
@@ -99,7 +111,7 @@ export default function SearchPage() {
                             htmlFor={`status-${status}`}
                             className="ml-2 text-sm font-medium capitalize"
                           >
-                            {status.replace('-', ' ')}
+                            {status.replace("-", " ")}
                           </label>
                         </div>
                       ))}
@@ -110,7 +122,7 @@ export default function SearchPage() {
             </AccordionItem>
           </Accordion>
         </div>
-        
+
         <div className="space-y-6">
           <div className="relative">
             <Input
@@ -125,9 +137,9 @@ export default function SearchPage() {
               </div>
             )}
           </div>
-          
+
           {searchResults.length > 0 ? (
-            <BookDisplay books={searchResults} />
+            <BookDisplay books={searchResults as any} />
           ) : (
             <div className="text-center py-12">
               <BookOpenCheck className="mx-auto h-12 w-12 text-muted-foreground" />
@@ -141,4 +153,4 @@ export default function SearchPage() {
       </div>
     </div>
   )
-} 
+}

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { useUser } from "@clerk/nextjs"
+import { useSession } from "next-auth/react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -30,7 +30,7 @@ const collectionFormSchema = z.object({
 type CollectionFormValues = z.infer<typeof collectionFormSchema>
 
 export default function CreateCollectionPage() {
-  const { user } = useUser()
+  const { data: session } = useSession()
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -43,28 +43,26 @@ export default function CreateCollectionPage() {
   })
 
   async function onSubmit(data: CollectionFormValues) {
-    if (!user) return
-    
+    if (!session?.user) return
+
     setIsSubmitting(true)
-    
+
     try {
       const response = await fetch("/api/collections", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       })
-      
+
       if (!response.ok) {
         throw new Error("Failed to create collection")
       }
-      
+
       toast({
         title: "Collection created",
         description: `${data.name} has been created.`,
       })
-      
+
       router.push("/collections")
       router.refresh()
     } catch (error) {
@@ -85,7 +83,7 @@ export default function CreateCollectionPage() {
           ← Back to Collections
         </Link>
       </div>
-      
+
       <Card>
         <CardHeader>
           <CardTitle>Create a New Collection</CardTitle>
@@ -107,7 +105,7 @@ export default function CreateCollectionPage() {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="description"
@@ -128,7 +126,7 @@ export default function CreateCollectionPage() {
                   </FormItem>
                 )}
               />
-              
+
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? "Creating..." : "Create Collection"}
               </Button>
@@ -138,4 +136,4 @@ export default function CreateCollectionPage() {
       </Card>
     </div>
   )
-} 
+}

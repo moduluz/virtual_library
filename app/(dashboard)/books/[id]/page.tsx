@@ -1,4 +1,4 @@
-import { currentUser } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { getBookById } from "@/lib/book-service";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,27 +9,16 @@ import BookDeleteButton from "./book-delete-button";
 import { PDFViewer } from "@/components/pdf-viewer";
 
 export default async function BookDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  console.log("BookDetailPage called with params:", params);
-
   try {
     const { id } = await params;
-    console.log("Book ID:", id);
 
-    const user = await currentUser();
-    console.log("User:", user?.id);
+    const session = await auth();
 
-    if (!user) {
-      redirect("/sign-in");
+    if (!session?.user) {
+      redirect("/auth/signin");
     }
 
-    const book = await getBookById(user.id, id);
-
-    // ADD THIS DEBUG:
-    console.log("🔍 DEBUG: Full book object:", JSON.stringify(book, null, 2));
-    console.log("🔍 DEBUG: PDF URL from db:", book?.pdf_url);
-    console.log("🔍 DEBUG: PDF URL exists:", !!book?.pdf_url);
-
-    console.log("Book found:", !!book);
+    const book = await getBookById(session.user.id!, id);
 
     if (!book) {
       notFound();
@@ -61,9 +50,9 @@ export default async function BookDetailPage({ params }: { params: Promise<{ id:
                 </Button>
               </Link>
 
-              {book.pdf_url && (
+              {book.pdfUrl && (
                 <div className="mt-4">
-                  <PDFViewer pdfUrl={book.pdf_url} title={book.title} bookId={book.id} />
+                  <PDFViewer pdfUrl={book.pdfUrl} title={book.title} bookId={book.id} />
                 </div>
               )}
 
@@ -169,44 +158,5 @@ export default async function BookDetailPage({ params }: { params: Promise<{ id:
   } catch (error) {
     console.error("BookDetailPage error:", error);
     throw error;
-  }
-}
-
-// filepath: C:/JavaScript/library-app/app/api/books/[id]/route.ts
-// ...
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  try {
-    const user = await currentUser();
-    if (!user?.id) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // ... rest of your logic using the 'userId' variable
-  } catch (err: any) {
-    return Response.json({ error: err.message }, { status: 500 });
-  }
-}
-
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  try {
-    const user = await currentUser();
-    if (!user?.id) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    // ... rest of your logic
-  } catch (err: any) {
-    return Response.json({ error: err.message }, { status: 500 });
-  }
-}
-
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  try {
-    const user = await currentUser();
-    if (!user?.id) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    // ... rest of your logic
-  } catch (err: any) {
-    return Response.json({ error: err.message }, { status: 500 });
   }
 }
