@@ -1,4 +1,5 @@
-# Personal Library Manager 454665
+# Personal Library Manager 
+
 
 A modern web application for managing your personal book collection, built with Next.js, TypeScript, and Supabase.
 
